@@ -1,0 +1,25 @@
+#
+#	skUnity.sk
+#	By BaeFell
+#	(c) All Rights Reserved
+#
+
+on load:
+	set {skunity::colours::admin} to "<##ff59ce>"
+	set {skunity::colours::moderator} to "<##9089ff>"
+	set {skunity::colours::supporter} to "<##fd7c58>"
+	set {skunity::colours::none} to "<##ffffff>"
+
+	# BaeFell
+	set {skunity::players::5de82efb-927e-4153-ad05-8dbf361a4a91::staff} to true
+	set {skunity::players::5de82efb-927e-4153-ad05-8dbf361a4a91::rank} to "admin"
+
+function skUnity_Get_Rank(player: player) :: string:
+	set {_uuid} to uuid of {_player}
+	if {skunity::players::%{_uuid}%::rank} is not set:
+		return "none"
+	return {skunity::players::%{_uuid}%::rank}
+
+function skUnity_Get_Coloured_Text(player: player, message: string) :: string:
+	set {_rank} to skUnity_Get_Rank({_player})
+	return "%{skunity::colours::%{_rank}%}%%{_message}%"

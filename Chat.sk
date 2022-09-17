@@ -1,0 +1,47 @@
+#
+#	Chat.sk
+#	By BaeFell
+#	(c) All Rights Reserved
+#
+
+options:
+	P: &c&lChat &7»&e
+
+on load:
+	set {chat::active} to true
+
+function Chat_Is_Active() :: boolean:
+	return {chat::active}
+
+function Chat_Turn_Off(announce: boolean = false, message: string = ""):
+	set {chat::active} to false
+	if {_announce} is true:
+		if {_message} is "":
+			set {_message} to "&cChat has been disabled."
+		broadcast "{@P} "
+		broadcast "{@P} %{_message}%"
+		broadcast "{@P} "
+
+function Chat_Disable(announce: boolean = false, message: string = ""):
+	Chat_Turn_Off({_announce}, {_message})
+
+function Chat_Turn_On(announce: boolean = false, message: string = ""):
+	set {chat::active} to true
+	if {_announce} is true:
+		if {_message} is "":
+			set {_message} to "&aChat has been enabled."
+		broadcast "{@P} "
+		broadcast "{@P} %{_message}%"
+		broadcast "{@P} "
+
+function Chat_Enable(announce: boolean = false, message: string = ""):
+	Chat_Turn_On({_announce}, {_message})
+
+on chat:
+	cancel event
+	if Chat_Is_Active() is false:
+		message "{@P} &cChat is currently disabled."
+		stop
+
+	set {_colour} to skUnity_Get_Coloured_Text(player, "%player%: ")
+	broadcast "%{_colour}%&r%message%"
