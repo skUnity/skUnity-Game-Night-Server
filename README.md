@@ -23,3 +23,5 @@ The code you submit must be easily readable, functional, use the required functi
 ## Support
 
 **NO SUPPORT IS GIVEN FOR THESE SCRIPTS. NO LIABILITY IS ACCEPTED BY SKUNITY OR ANY CONTRIBUTORS. USE AT YOUR OWN RISK. DO NOT SEEK OUT SUPPORT FROM SKUNITY OR CONTRIBUTORS.**
+
+Only support for developing the scripts and creating new games is provided by skUnity.
