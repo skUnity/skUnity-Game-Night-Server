@@ -48,7 +48,7 @@ on quit:
 	delete {lobby::players::%uuid of player%}
 
 function GameManager_Is_Game(game: string) :: boolean:
-	if {_game} is GameManager_Get_Game():
+	if {_game} is GameManager_Get_Game_Key():
 		return true
 	return false
 
@@ -134,9 +134,11 @@ function GameManager_Register_Game(gamekey: string, gamename: string, gamefile: 
 	set {game::games::%{_gamekey}%} to {_gamename}
 	set {game::games::%{_gamekey}%::file} to {_gamefile}
 
-function GameManager_Register_Vote(gamekey: string, votetype: string, voteitemname: string):
+function GameManager_Register_Vote(gamekey: string, votetype: string, voteitemkey: string, voteitemname: string):
 	set {game::games::%{_gamekey}%::votes::%{_votetype}%} to {_votetype}
-	add {_voteitemname} to {game::games::%{_gamekey}%::votes::%{_votetype}%::votelist::*} 
+	add {_voteitemname} to {game::games::%{_gamekey}%::votes::%{_votetype}%::votelist::*}
+	set {_lindex} to size of {game::games::%{_gamekey}%::votes::%{_votetype}%::votelist::*}
+	set {game::games::%{_gamekey}%::votes::%{_votetype}%::votelistkeys::%{_lindex}%} to {_voteitemkey}
 
 function GameManager_Voting_Start(map: string):
 	delete {game::votes::*}
@@ -164,6 +166,28 @@ function GameManager_Voting_Announce():
 			broadcast "{@P} &a%loop-index%) &e%loop-value% (&a%{game::votes::mode::%loop-index%}% votes&e)"
 		broadcast "{@P} Vote using &a/vote mode <number>"
 		broadcast "{@P}"
+
+function GameManager_Get_Winning_Name(type: string) :: string:
+	set {_sorted::*} to {game::votes::%{_type}%::*}
+	set {_first} to first element out of {_sorted::*}
+	set {_firstindex} to 1
+	loop {_sorted::*}:
+		if loop-value is greater than {_first}:
+			set {_first} to loop-value
+			set {_firstindex} to loop-index
+	set {_gamekey} to GameManager_Get_Game_Key()
+	return {game::games::%{_gamekey}%::votes::%{_type}%::votelist::%{_firstindex}%}
+
+function GameManager_Get_Winning_Key(type: string) :: string:
+	set {_sorted::*} to {game::votes::%{_type}%::*}
+	set {_first} to first element out of {_sorted::*}
+	set {_firstindex} to 1
+	loop {_sorted::*}:
+		if loop-value is greater than {_first}:
+			set {_first} to loop-value
+			set {_firstindex} to loop-index
+	set {_gamekey} to GameManager_Get_Game_Key()
+	return {game::games::%{_gamekey}%::votes::%{_type}%::votelistkeys::%{_firstindex}%}
 
 command /game [<text>] [<text>]:
 	trigger:
@@ -212,9 +236,9 @@ command /vote [<text>] [<integer>]:
 			if arg 1 is "map" or "mode":
 				if arg 2 is set:
 					if {game::votes::%arg 1%::%arg 2%} is set:
-						if {game::votes::player::%arg 1%} is set:
-							subtract 1 from {game::votes::%arg 1%::%{game::votes::player::%arg 1%}%}
-						set {game::votes::player::%arg 1%} to arg 2
+						if {game::votes::player::%uuid of player%::%arg 1%} is set:
+							subtract 1 from {game::votes::%arg 1%::%{game::votes::player::%uuid of player%::%arg 1%}%}
+						set {game::votes::player::%uuid of player%::%arg 1%} to arg 2
 						add 1 to {game::votes::%arg 1%::%arg 2%}
 						GameManager_Voting_Announce()
 					else:
