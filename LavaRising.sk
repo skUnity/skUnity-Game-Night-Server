@@ -4,32 +4,44 @@
 #	(c) All Rights Reserved
 #
 
+# /lavarising setup
+# 	select 2 points
+# /lavarising movepoint 1 down
+# /lavarising movepoint 2 up
+# /lavarising setarena <name>
+# /lavarising setspawn <name>
+
 options:
 	P: &c&lLava Rising &7»&e
 
 on load:
 	GameManager_Register_Game("lava", "Lava Rising", script)
 
-	GameManager_Register_Vote("lava", "map", "Office")
-	GameManager_Register_Vote("lava", "map", "Forest")
-	GameManager_Register_Vote("lava", "map", "High Rise")
+	GameManager_Register_Vote("lava", "map", "office", "Office")
+	GameManager_Register_Vote("lava", "map", "forest", "Forest")
+	GameManager_Register_Vote("lava", "map", "highrise", "High Rise")
 
-	GameManager_Register_Vote("lava", "mode", "Extreme Height")
-	GameManager_Register_Vote("lava", "mode", "Spontanious Lava")
-	GameManager_Register_Vote("lava", "mode", "Extreme Modifiers")
-	GameManager_Register_Vote("lava", "mode", "Fast Rising")
+	GameManager_Register_Vote("lava", "mode", "extreme", "Extreme Height")
+	GameManager_Register_Vote("lava", "mode", "spontanious", "Spontanious Lava")
+	GameManager_Register_Vote("lava", "mode", "extreme", "Extreme Modifiers")
+	GameManager_Register_Vote("lava", "mode", "fast", "Fast Rising")
 
 	delete {lavarising::setup::*}
 	delete {lavarising::alive::*}
 
 on command:
 	if GameManager_Check_Starting(player, command, arguments, "lava") is true:
+		set {lavarising::currentarena} to GameManager_Get_Winning_Key("map")
+		set {lavarising::pvp} to false
 		# Lava Rising is starting
 		loop {lobby::players::*}:
 			set {lavarising::alive::%loop-value%} to loop-value
-			teleport loop-value to {lavarising::game::spawn}
+			#teleport loop-value to {lavarising::game::spawn}
+			teleport loop-value to {lavarising::game::arena::%{lavarising::currentarena}%::spawn}
 		# 10 seconds from when this detected to when the game starts
 		wait 10 seconds
+
+		GameManager_Set_Game_Status("playing")
 		loop {lobby::players::*}:
 			set gamemode of loop-value to survival
 		LavaRising_Lava(-63)
@@ -39,19 +51,25 @@ on respawn:
 		GameManager_Teleport_To_Spawn(player)
 
 on death:
-	if victim is player:
-		delete {lavarising::alive::%victim%}
-		broadcast "{@P} %victim% has died!"
-		LavaRising_Check_Ended()
+	if GameManager_Is_Game("lava") is true:
+		if victim is player:
+			delete {lavarising::alive::%victim%}
+			broadcast "{@P} %victim% has died!"
+			LavaRising_Check_Ended()
 
 function LavaRising_Check_Ended():
 	if size of {lavarising::alive::*} is 1:
+		set {_true} to true
+	if {lavarising::stop} is set:
+		set {_true} to true
+	if {_true} is set:
 		set {lavarising::setup::status} to "ended"
 		loop {lavarising::alive::*}:
 			set {_winner} to loop-value
 		GameManager_Game_Ended({_winner})
 		wait 2 seconds
 		LavaRising_Reset_Arena()
+		delete {lavarising::currentarena}
 
 function LavaRising_Lava(y: integer):
 	if {lavarising::setup::status} is "ended":
@@ -64,9 +82,9 @@ function LavaRising_Rise_Lava(y: integer):
 		stop
 	add 1 to {_y}
 	broadcast "{@P} The lava is at &c%{_y}%!"
-	set {_point1} to {lavarising::game::point1}
+	set {_point1} to {lavarising::game::arena::%{lavarising::currentarena}%::point1}
 	set y coord of {_point1} to {_y}
-	set {_point2} to {lavarising::game::point2}
+	set {_point2} to {lavarising::game::arena::%{lavarising::currentarena}%::point2}
 	set y coord of {_point2} to {_y}
 
 	loop blocks within {_point1} and {_point2}:
@@ -74,19 +92,31 @@ function LavaRising_Rise_Lava(y: integer):
 			set loop-block to lava
 	LavaRising_Lava({_y})
 
-
 function LavaRising_Reset_Arena():
-	loop blocks within {lavarising::game::point1} and {lavarising::game::point2}:	
+	loop blocks within {lavarising::game::arena::%{lavarising::currentarena}%::point1} and {lavarising::game::arena::%{lavarising::currentarena}%::point2}:	
 		add 1 to {_c}
 		if {_c} is 10000:
 			wait 1 second
-		if {lavarising::game::arena::locs::%location of loop-block%} is not set:
+		if {lavarising::game::arena::%{lavarising::currentarena}%::locs::%location of loop-block%} is not set:
 			set loop-block to air
 		else:
-			if {lavarising::game::arena::locs::%location of loop-block%} is peony or top-half peony:
+			if {lavarising::game::arena::%{lavarising::currentarena}%::locs::%location of loop-block%} is peony or top-half peony:
 				set loop-block to air
 			else:
-				set loop-block to {lavarising::game::arena::locs::%location of loop-block%}
+				set loop-block to {lavarising::game::arena::%{lavarising::currentarena}%::locs::%location of loop-block%}
+
+function LavaRising_Get_Midpoint(arena: string) :: location:
+	set {_midpoint} to {lavarising::game::arena::%{_arena}%::point1}
+	set x coord of {_midpoint} to x coord of {lavarising::game::arena::%{_arena}%::point1} + x coord of {lavarising::game::arena::%{_arena}%::point2}
+	set x coord of {_midpoint} to x coord of {_midpoint} / 2
+	set x coord of {_midpoint} to round(x coord of {_midpoint})
+	add 0.5 to x coord of {_midpoint}
+
+	set z coord of {_midpoint} to z coord of {lavarising::game::arena::%{_arena}%::point1} + z coord of {lavarising::game::arena::%{_arena}%::point2}
+	set z coord of {_midpoint} to z coord of {_midpoint} / 2
+	set z coord of {_midpoint} to round(z coord of {_midpoint})
+	add 0.5 to z coord of {_midpoint}
+	return {_midpoint}
 
 command /lavarising [<text>] [<text>] [<text>]:
 	trigger:
@@ -103,16 +133,24 @@ command /lavarising [<text>] [<text>] [<text>]:
 				message "{@P} &aDisabled &esetup mode."
 
 		else if arg 1 is "setspawn":
-			set {lavarising::game::spawn} to location of player
-			message "{@P} Set the spawn point to &a%location of player%"
+			if arg 2 is set:
+				set {lavarising::game::arena::%arg 2%::spawn} to location of player
+				message "{@P} Set the spawn point to &a%location of player%"
+			else:
+				message "{@P} Which arena do you want to set the spawn point of?"
 		else if arg 1 is "setarena":
-			delete {lavarising::game::arena::locs::*}
+			if arg 2 is not set:
+				message "{@P} Which arena do you want to set the spawn point of?"
+				stop
+			set {lavarising::game::arena::%arg 2%::point1} to {lavarising::game::point1}
+			set {lavarising::game::arena::%arg 2%::point2} to {lavarising::game::point2}
+			delete {lavarising::game::arena::%arg 2%::locs::*}
 			message "{@P} Setting up the &aLava Rising &earena!"
 			set {_c} to 0
 			loop blocks within {lavarising::game::point1} and {lavarising::game::point2}:
 				if loop-block is not air or black stained glass:
 					add 1 to {_c}
-					set {lavarising::game::arena::locs::%location of loop-block%} to type of loop-block
+					set {lavarising::game::arena::%arg 2%::locs::%location of loop-block%} to type of loop-block
 					if {_c} is 5000:
 						wait 1 second
 						message "{@P} Sorry... just waiting 1 second. "
@@ -120,6 +158,7 @@ command /lavarising [<text>] [<text>] [<text>]:
 						message "{@P} Last y-coord: &a%y coord of location of loop-block%"
 						set {_c} to 0
 			message "{@P} The &aLava Rising &earena has been setup!"
+			message "{@P} Total size: &e%size of {lavarising::game::arena::%arg 2%::locs::*}%"
 		else if arg 1 is "movepoint":
 			if arg 3 is "up":
 				set y coord of {lavarising::game::point%arg 2%} to 320
@@ -134,8 +173,14 @@ command /lavarising [<text>] [<text>] [<text>]:
 			message "{@P} The &aLava Rising &earena has been &eRESET!"
 			message "{@P} Time taken: &a%{_diff}%"
 		else if arg 1 is "spawn":
-			teleport player to {lavarising::game::spawn}
+			teleport player to {lavarising::game::arena::%arg 2%::spawn}
 			message "{@P} You've been teleported to &aspawn"
+		else if arg 1 is "worldborder":
+			if arg 2 is "centre":
+				
+			else if arg 2 is "setsize":
+				message "HI"
+
 
 on left click:
 	if {lavarising::setup::%uuid of player%} is set:
@@ -148,3 +193,15 @@ on right click:
 		set {lavarising::game::point2} to event-location
 		message "{@P} Set the point 2 to &a%event-location%"
 		cancel event
+
+on hunger change:
+	if GameManager_Is_Game("lava") is true:
+		cancel event
+
+on damage:
+	if GameManager_Is_Game("lava") is true:
+		if GameManager_Get_Game_Status() is "starting":
+			if attacker is player:
+				if victim is player:
+					if {lavarising::pvp} is false:
+						cancel event
