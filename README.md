@@ -33,6 +33,8 @@ The code you submit must be easily readable, functional, use the required functi
 - Your code shouldn't override any other functions unless there is good reason.
 - Your script may use the following addons: skript-reflect and SkBee only. If you need a specific addon added, contact BaeFell.
 
+By submitting your code to the repo, you're agreeing that you give skUnity the permission to use your code, in part or full, in the script it was originally intended for or in other scripts developed by skUnity without any compensation of any sort. You release all rights and ownership of the code to skUnity. While this may seem extreme, due to previous cases in the Minecraft development envrioment, we are protecting ourselves.
+
 ## Support
 
 **NO SUPPORT IS GIVEN FOR THESE SCRIPTS. NO LIABILITY IS ACCEPTED BY SKUNITY OR ANY CONTRIBUTORS. USE AT YOUR OWN RISK. DO NOT SEEK OUT SUPPORT FROM SKUNITY OR CONTRIBUTORS.**
