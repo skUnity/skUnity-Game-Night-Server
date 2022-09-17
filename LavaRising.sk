@@ -1,0 +1,88 @@
+#
+#	LavaRising.sk
+#	By BaeFell
+#	(c) All Rights Reserved
+#
+
+options:
+	P: &c&lLava Rising &7»&e
+
+on load:
+	GameManager_Register_Game("lava", "Lava Rising", script)
+	delete {lavarising::setup::*}
+
+on command:
+	if GameManager_Check_Starting(command, arguments, "lava") is true:
+		# Lava Rising is starting
+		# 10 seconds from when this detected to when the game starts
+		wait 10 seconds
+		loop {lobby::players::*}:
+			teleport loop-value to {lavarising::game::spawn}
+
+function LavaRising_Reset_Arena():
+	loop blocks within {lavarising::game::point1} and {lavarising::game::point2}:	
+		add 1 to {_c}
+		if {_c} is 5000:
+			wait 1 second
+		if {lavarising::game::arena::locs::%location of loop-block%} is not set:
+			set loop-block to air
+		else:
+			set loop-block to {lavarising::game::arena::locs::%location of loop-block%}
+
+command /lavarising [<text>] [<text>] [<text>]:
+	trigger:
+		if GameManager_Is_Staff(player) is false:
+			message "{@P} You don't have permission to do that"
+			stop
+
+		if arg 1 is "setup":
+			if {lavarising::setup::%uuid of player%} is not set:
+				set {lavarising::setup::%uuid of player%} to true
+				message "{@P} &aEnabled &esetup mode. &aLeft click &eto set &epoint 1 &eand &aright click &eto set &apoint 2"
+			else:
+				delete {lavarising::setup::%uuid of player%}
+				message "{@P} &aDisabled &esetup mode."
+
+		else if arg 1 is "setspawn":
+			set {lavarising::game::spawn} to location of player
+			message "{@P} Set the spawn point to &a%location of player%"
+		else if arg 1 is "setarena":
+			delete {lavarising::game::arena::locs::*}
+			message "{@P} Setting up the &aLava Rising &earena!"
+			set {_c} to 0
+			loop blocks within {lavarising::game::point1} and {lavarising::game::point2}:
+				if loop-block is not air or black stained glass:
+					add 1 to {_c}
+					set {lavarising::game::arena::locs::%location of loop-block%} to type of loop-block
+					if {_c} is 5000:
+						wait 1 second
+						message "{@P} Sorry... just waiting 1 second. "
+						message "{@P} Processed: &a%size of {lavarising::game::arena::locs::*}%"
+						message "{@P} Last y-coord: &a%y coord of location of loop-block%"
+						set {_c} to 0
+			message "{@P} The &aLava Rising &earena has been setup!"
+		else if arg 1 is "movepoint":
+			if arg 3 is "up":
+				set y coord of {lavarising::game::point%arg 2%} to 320
+			else:
+				set y coord of {lavarising::game::point%arg 2%} to -64
+			message "{@P} Set &ay-coord &eof &apoint %arg 2% &eto &a%y coord of {lavarising::game::point%arg 2%}%"
+		else if arg 1 is "reset":
+			message "{@P} Resetting the &aLava Rising &earena"
+			LavaRising_Reset_Arena()
+			message "{@P} The &aLava Rising &earena has been &eRESET!"
+		else if arg 1 is "spawn":
+			teleport player to {lavarising::game::spawn}
+			message "{@P} You've been teleported to &aspawn"
+
+on left click:
+	if {lavarising::setup::%uuid of player%} is set:
+		set {lavarising::game::point1} to event-location
+		message "{@P} Set the point 1 to &a%event-location%"
+		cancel event
+
+on right click:
+	if {lavarising::setup::%uuid of player%} is set:
+		set {lavarising::game::point2} to event-location
+		message "{@P} Set the point 2 to &a%event-location%"
+		cancel event

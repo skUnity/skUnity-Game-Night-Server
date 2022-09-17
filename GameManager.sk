@@ -1,0 +1,132 @@
+#
+#	GameManager.sk
+#	By BaeFell
+#	(c) All Rights Reserved
+#
+
+options:
+	P: &c&lGameManager &7»&e
+
+on load:
+	#set {game::games::lava} to "Lava Rising"
+	#set {game::games::manhunt} to "Manhunt"
+	#set {game::games::squid} to "Squid Game"
+	set {staff::BaeFell} to true
+	delete {game::selected-game}
+	delete {lobby::players::*}
+	set {game::status} to "waiting"
+
+on join:
+	if {staff::%player%} is set:
+		set {staff::%uuid of player%} to true
+
+	if {game::selected-game} is set:
+		message "{@P} Welcome &a%player% &eto the &askUnity Game Night Server! &eThe selected game is &a%GameManager_Get_Game()%"
+	else:
+		message "{@P} Welcome &a%player% &eto the &askUnity Game Night Server!"
+	message "{@P} &cREMINDER: the skUnity rules apply on the Game Night Server. You can be timed out or banned from both here and the skUnity Discord."
+	set join message to ""
+
+	if {game::status} is "playing" or "starting":
+		message "{@P} The current round of &a%GameManager_Get_Game()% &ehas already started. You can spectate it by doing &a/spectate &ethen take part next round."
+
+on quit:
+	delete {lobby::players::%uuid of player%}
+
+function GameManager_Get_Game() :: string:
+	return {game::games::%{game::selected-game}%}
+
+function GameManager_Get_Game_Key() :: string:
+	return {game::selected-game}
+
+function GameManager_Get_Game_Status() :: string:
+	return {game::status}
+
+function GameManager_Check_Starting(command: string, arguments: string, gamekey: string) :: boolean:
+	if {_command} is "game":
+		if {_arguments} is "start":
+			if GameManager_Get_Game_Key() is {_gamekey}:
+				if GameManager_Get_Game_Status() is "starting":
+					return true
+	return false
+
+function GameManager_Is_Staff(player: player) :: boolean:
+	set {_uuid} to uuid of {_player}
+	if {staff::%{_uuid}%} is set:
+		return true
+	return false
+
+function GameManager_Broadcast(message: string, two: string = "", three: string = "", four: string = "", five: string = ""):
+	broadcast "{@P} "
+	broadcast "{@P} %{_message}%"
+	if {_two} is not "":
+		broadcast "{@P} %{_two}%"
+	if {_three} is not "":
+		broadcast "{@P} %{_three}%"
+	if {_four} is not "":
+		broadcast "{@P} %{_four}%"
+	if {_five} is not "":
+		broadcast "{@P} %{_five}%"
+	broadcast "{@P} "
+
+function GameManager_Multi_Line_Broadcast(message: strings):
+	broadcast "{@P} "
+	loop {_message::*}:
+		broadcast "{@P} %loop-value%"
+	broadcast "{@P} "
+
+function GameManager_Add_Win(player: player):
+	set {_game} to GameManager_Get_Game()
+	set {_uuid} to uuid of {_player}
+	if {leaderboard::%{_uuid}%::%{_game}%::wins} is not set:
+		set {leaderboard::%{_uuid}%::%{_game}%::wins} to 1
+	else:
+		add 1 to {leaderboard::%{_uuid}%::%{_game}%::wins}
+
+function GameManager_Add_Loss(player: player):
+	set {_game} to GameManager_Get_Game()
+	set {_uuid} to uuid of {_player}
+	if {leaderboard::%{_uuid}%::%{_game}%::losses} is not set:
+		set {leaderboard::%{_uuid}%::%{_game}%::losses} to 1
+	else:
+		add 1 to {leaderboard::%{_uuid}%::%{_game}%::losses}
+
+function GameManager_Register_Game(gamekey: string, gamename: string, gamefile: string):
+	set {game::games::%{_gamekey}%} to {_gamename}
+	set {game::games::%{_gamekey}%::file} to {_gamefile}
+
+command /game [<text>] [<text>]:
+	trigger:
+		if GameManager_Is_Staff(player) is false:
+			message "{@P} You don't have permission to do that"
+			stop
+		if arg 1 is "select":
+			if {game::games::%arg 2%} is set:
+				set {game::selected-game} to arg 2
+				GameManager_Broadcast("&a%player% &ehas selected &a%GameManager_Get_Game()%", "Use &a/ready &eto ready up")
+			else:
+				message "{@P} That game doesn't exist"
+		else if arg 1 is "start":
+			if GameManager_Get_Game() is not set:
+				message "{@P} You need to select a game before you can start one"
+				stop
+			set {game::status} to "starting"
+			GameManager_Broadcast("&a%player% &ehas started the countdown for &a%GameManager_Get_Game()%", "&a%GameManager_Get_Game()% &ewill start in &e10 seconds")
+			set {_c} to 10
+			loop 9 times:
+				set {_c} to {_c} - 1
+				wait 1 second
+				GameManager_Broadcast("&a%GameManager_Get_Game()% &ewill start in &e%{_c}% seconds")
+			GameManager_Broadcast("&a%GameManager_Get_Game()% &eis now starting!")
+
+command /ready:
+	trigger:
+		message "{@P} You've readied up! We're just waiting on a staff member to start the game"
+		set {lobby::players::%uuid of player%} to player
+		if size of {lobby::players::*} is 1:
+			GameManager_Broadcast("%player% has readied up (%size of {lobby::players::*}% player ready)")
+		else:
+			GameManager_Broadcast("%player% has readied up (%size of {lobby::players::*}% players ready)")
+
+on chat:
+	
