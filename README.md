@@ -19,3 +19,7 @@ The GameManager.sk is the main script that functions as the lobby handler, leade
 Games must run their own checks to make sure they're the game being ran to prevent them having code ran when it's not that game. LavaRising.sk is a game that will be used but also an example of the standard.
 
 The code you submit must be easily readable, functional, use the required functions from GameManager.sk, have no known bugs/exploits.
+
+## Support
+
+**NO SUPPORT IS GIVEN FOR THESE SCRIPTS. NO LIABILITY IS ACCEPTED BY SKUNITY OR ANY CONTRIBUTORS. USE AT YOUR OWN RISK. DO NOT SEEK OUT SUPPORT FROM SKUNITY OR CONTRIBUTORS.**
