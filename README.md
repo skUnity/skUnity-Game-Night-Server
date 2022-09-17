@@ -18,7 +18,20 @@ The GameManager.sk is the main script that functions as the lobby handler, leade
 
 Games must run their own checks to make sure they're the game being ran to prevent them having code ran when it's not that game. LavaRising.sk is a game that will be used but also an example of the standard.
 
-The code you submit must be easily readable, functional, use the required functions from GameManager.sk, have no known bugs/exploits.
+The code you submit must be easily readable, functional, use the required functions from GameManager.sk, have no known bugs/exploits. 
+
+#### Programming Standards
+
+- Identation must use tabs, not spaces. 
+- You must not use in-line ifs.
+- Ideally break your code down into functions.
+- You must use GameManager functions where possible.
+- Your code should be flexible in setup of any arenas, no hardcoded values.
+- Your messages must use the prefix found in GameManager.sk but with the "GameManager" text changed.
+- Your messages must use &e for normal text, &c for warning text, &a for highlighting specific words in a message.
+- Your commands must use GameManager_Is_Staff(player) if they're not a player command.
+- Your code shouldn't override any other functions unless there is good reason.
+- Your script may use the following addons: skript-reflect and SkBee only. If you need a specific addon added, contact BaeFell.
 
 ## Support
 
