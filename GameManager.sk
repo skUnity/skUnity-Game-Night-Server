@@ -4,6 +4,17 @@
 #	(c) All Rights Reserved
 #
 
+#
+#	Game status:
+#		- waiting
+#			- no game has been selected, waiting for a staff member to select one
+#		- voting
+#			- voting window is now open, waiting for a staff member to start
+#		- starting
+#			- the selected game is starting up, announcements made for 10 second countdown
+#		- playing
+#			- game is now being played
+
 options:
 	P: &c&lGameManager &7»&e
 
@@ -12,8 +23,8 @@ on load:
 	#set {game::games::manhunt} to "Manhunt"
 	#set {game::games::squid} to "Squid Game"
 	set {staff::BaeFell} to true
-	delete {game::selected-game}
 	delete {lobby::players::*}
+	delete {game::*}
 	set {game::status} to "waiting"
 
 on join:
@@ -30,8 +41,16 @@ on join:
 	if {game::status} is "playing" or "starting":
 		message "{@P} The current round of &a%GameManager_Get_Game()% &ehas already started. You can spectate it by doing &a/spectate &ethen take part next round."
 
+	set gamemode of player to adventure
+	teleport player to {lobby::spawn}
+
 on quit:
 	delete {lobby::players::%uuid of player%}
+
+function GameManager_Is_Game(game: string) :: boolean:
+	if {_game} is GameManager_Get_Game():
+		return true
+	return false
 
 function GameManager_Get_Game() :: string:
 	return {game::games::%{game::selected-game}%}
@@ -42,13 +61,33 @@ function GameManager_Get_Game_Key() :: string:
 function GameManager_Get_Game_Status() :: string:
 	return {game::status}
 
-function GameManager_Check_Starting(command: string, arguments: string, gamekey: string) :: boolean:
-	if {_command} is "game":
-		if {_arguments} is "start":
-			if GameManager_Get_Game_Key() is {_gamekey}:
-				if GameManager_Get_Game_Status() is "starting":
-					return true
+function GameManager_Set_Game_Status(status: string):
+	set {game::status} to {_status}
+
+function GameManager_Teleport_All_To_Spawn():
+	loop all players:
+		teleport loop-player to {lobby::spawn}
+
+function GameManager_Teleport_To_Spawn(player: player):
+	teleport {_player} to {lobby::spawn}	
+
+function GameManager_Check_Starting(player: player, command: string, arguments: string, gamekey: string) :: boolean:
+	if GameManager_Is_Staff({_player}) is true:
+		if {_command} is "game":
+			if {_arguments} is "start":
+				if GameManager_Get_Game_Key() is {_gamekey}:
+					if GameManager_Get_Game_Status() is "voting":
+						return true
 	return false
+
+function GameManager_Game_Ended(winner: player):
+	loop all players:
+		set gamemode of loop-player to adventure
+		GameManager_Teleport_To_Spawn(loop-player)
+
+	GameManager_Broadcast("&a%GameManager_Get_Game()% &ehas finished! &a%{_winner}% &ewas the winner!")
+	GameManager_Set_Game_Status("waiting")
+
 
 function GameManager_Is_Staff(player: player) :: boolean:
 	set {_uuid} to uuid of {_player}
@@ -95,6 +134,37 @@ function GameManager_Register_Game(gamekey: string, gamename: string, gamefile: 
 	set {game::games::%{_gamekey}%} to {_gamename}
 	set {game::games::%{_gamekey}%::file} to {_gamefile}
 
+function GameManager_Register_Vote(gamekey: string, votetype: string, voteitemname: string):
+	set {game::games::%{_gamekey}%::votes::%{_votetype}%} to {_votetype}
+	add {_voteitemname} to {game::games::%{_gamekey}%::votes::%{_votetype}%::votelist::*} 
+
+function GameManager_Voting_Start(map: string):
+	delete {game::votes::*}
+	if {game::games::%{game::selected-game}%::votes::map} is not set:
+		if {game::games::%{game::selected-game}%::votes::mode} is not set:
+			stop
+	loop {game::games::%{game::selected-game}%::votes::map::votelist::*}:
+		set {game::votes::map::%loop-index%} to 0
+	loop {game::games::%{game::selected-game}%::votes::mode::votelist::*}:
+		set {game::votes::mode::%loop-index%} to 0
+	GameManager_Voting_Announce()
+
+function GameManager_Voting_Announce():
+	if {game::games::%{game::selected-game}%::votes::map} is set:
+		broadcast "{@P} "
+		broadcast "{@P} Vote for a &amap &efor &a%GameManager_Get_Game()%"
+		loop {game::games::%{game::selected-game}%::votes::map::votelist::*}:
+			broadcast "{@P} &a%loop-index%) &e%loop-value% (&a%{game::votes::map::%loop-index%}% votes&e)"
+		broadcast "{@P} Vote using &a/vote map <number>"
+		broadcast "{@P}"
+	if {game::games::%{game::selected-game}%::votes::mode} is set:
+		broadcast "{@P} "
+		broadcast "{@P} Vote for a &amode &efor &a%GameManager_Get_Game()%"
+		loop {game::games::%{game::selected-game}%::votes::mode::votelist::*}:
+			broadcast "{@P} &a%loop-index%) &e%loop-value% (&a%{game::votes::mode::%loop-index%}% votes&e)"
+		broadcast "{@P} Vote using &a/vote mode <number>"
+		broadcast "{@P}"
+
 command /game [<text>] [<text>]:
 	trigger:
 		if GameManager_Is_Staff(player) is false:
@@ -104,6 +174,9 @@ command /game [<text>] [<text>]:
 			if {game::games::%arg 2%} is set:
 				set {game::selected-game} to arg 2
 				GameManager_Broadcast("&a%player% &ehas selected &a%GameManager_Get_Game()%", "Use &a/ready &eto ready up")
+				Chat_Disable()
+				GameManager_Set_Game_Status("voting")
+				GameManager_Voting_Start(arg 2)
 			else:
 				message "{@P} That game doesn't exist"
 		else if arg 1 is "start":
@@ -111,6 +184,7 @@ command /game [<text>] [<text>]:
 				message "{@P} You need to select a game before you can start one"
 				stop
 			set {game::status} to "starting"
+			Chat_Enable()
 			GameManager_Broadcast("&a%player% &ehas started the countdown for &a%GameManager_Get_Game()%", "&a%GameManager_Get_Game()% &ewill start in &e10 seconds")
 			set {_c} to 10
 			loop 9 times:
@@ -118,15 +192,48 @@ command /game [<text>] [<text>]:
 				wait 1 second
 				GameManager_Broadcast("&a%GameManager_Get_Game()% &ewill start in &e%{_c}% seconds")
 			GameManager_Broadcast("&a%GameManager_Get_Game()% &eis now starting!")
+		else if arg 1 is "stop":
+			delete {game::selected-game}
+			message "{@P} Stopped selected game"
+
+command /lobby [<text>] [<text>]:
+	trigger:
+		if GameManager_Is_Staff(player) is false:
+			message "{@P} You don't have permission to do that"
+			stop
+
+		if arg 1 is "setspawn":
+			set {lobby::spawn} to location of player
+			message "{@P} Set lobby spawn to &a%{lobby::spawn}%"
+
+command /vote [<text>] [<integer>]:
+	trigger:
+		if GameManager_Get_Game_Status() is "voting":
+			if arg 1 is "map" or "mode":
+				if arg 2 is set:
+					if {game::votes::%arg 1%::%arg 2%} is set:
+						if {game::votes::player::%arg 1%} is set:
+							subtract 1 from {game::votes::%arg 1%::%{game::votes::player::%arg 1%}%}
+						set {game::votes::player::%arg 1%} to arg 2
+						add 1 to {game::votes::%arg 1%::%arg 2%}
+						GameManager_Voting_Announce()
+					else:
+						message "{@P} Invalid option. Valid options between &a1 &eand &a%size of {game::games::%{game::selected-game}%::votes::%arg 1%::votelist::*}%"
+				else:
+					message "{@P} Invalid argument. Valid command: &a/vote <map|mode> <number>"
+			else:
+				message "{@P} Invalid argument. Valid command: &a/vote <map|mode> <number>"
+		else:
+			message "{@P} Voting isn't open at the moment"
+
 
 command /ready:
 	trigger:
 		message "{@P} You've readied up! We're just waiting on a staff member to start the game"
 		set {lobby::players::%uuid of player%} to player
+		stop
 		if size of {lobby::players::*} is 1:
 			GameManager_Broadcast("%player% has readied up (%size of {lobby::players::*}% player ready)")
 		else:
 			GameManager_Broadcast("%player% has readied up (%size of {lobby::players::*}% players ready)")
 
-on chat:
-	

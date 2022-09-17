@@ -9,25 +9,84 @@ options:
 
 on load:
 	GameManager_Register_Game("lava", "Lava Rising", script)
+
+	GameManager_Register_Vote("lava", "map", "Office")
+	GameManager_Register_Vote("lava", "map", "Forest")
+	GameManager_Register_Vote("lava", "map", "High Rise")
+
+	GameManager_Register_Vote("lava", "mode", "Extreme Height")
+	GameManager_Register_Vote("lava", "mode", "Spontanious Lava")
+	GameManager_Register_Vote("lava", "mode", "Extreme Modifiers")
+	GameManager_Register_Vote("lava", "mode", "Fast Rising")
+
 	delete {lavarising::setup::*}
+	delete {lavarising::alive::*}
 
 on command:
-	if GameManager_Check_Starting(command, arguments, "lava") is true:
+	if GameManager_Check_Starting(player, command, arguments, "lava") is true:
 		# Lava Rising is starting
+		loop {lobby::players::*}:
+			set {lavarising::alive::%loop-value%} to loop-value
+			teleport loop-value to {lavarising::game::spawn}
 		# 10 seconds from when this detected to when the game starts
 		wait 10 seconds
 		loop {lobby::players::*}:
-			teleport loop-value to {lavarising::game::spawn}
+			set gamemode of loop-value to survival
+		LavaRising_Lava(-63)
+
+on respawn:
+	if GameManager_Is_Game("lava") is true:
+		GameManager_Teleport_To_Spawn(player)
+
+on death:
+	if victim is player:
+		delete {lavarising::alive::%victim%}
+		broadcast "{@P} %victim% has died!"
+		LavaRising_Check_Ended()
+
+function LavaRising_Check_Ended():
+	if size of {lavarising::alive::*} is 1:
+		set {lavarising::setup::status} to "ended"
+		loop {lavarising::alive::*}:
+			set {_winner} to loop-value
+		GameManager_Game_Ended({_winner})
+		wait 2 seconds
+		LavaRising_Reset_Arena()
+
+function LavaRising_Lava(y: integer):
+	if {lavarising::setup::status} is "ended":
+		stop
+	LavaRising_Rise_Lava({_y})
+
+function LavaRising_Rise_Lava(y: integer):
+	wait 1 second
+	if {lavarising::setup::status} is "ended":
+		stop
+	add 1 to {_y}
+	broadcast "{@P} The lava is at &c%{_y}%!"
+	set {_point1} to {lavarising::game::point1}
+	set y coord of {_point1} to {_y}
+	set {_point2} to {lavarising::game::point2}
+	set y coord of {_point2} to {_y}
+
+	loop blocks within {_point1} and {_point2}:
+		if loop-block is air or water:
+			set loop-block to lava
+	LavaRising_Lava({_y})
+
 
 function LavaRising_Reset_Arena():
 	loop blocks within {lavarising::game::point1} and {lavarising::game::point2}:	
 		add 1 to {_c}
-		if {_c} is 5000:
+		if {_c} is 10000:
 			wait 1 second
 		if {lavarising::game::arena::locs::%location of loop-block%} is not set:
 			set loop-block to air
 		else:
-			set loop-block to {lavarising::game::arena::locs::%location of loop-block%}
+			if {lavarising::game::arena::locs::%location of loop-block%} is peony or top-half peony:
+				set loop-block to air
+			else:
+				set loop-block to {lavarising::game::arena::locs::%location of loop-block%}
 
 command /lavarising [<text>] [<text>] [<text>]:
 	trigger:
@@ -68,9 +127,12 @@ command /lavarising [<text>] [<text>] [<text>]:
 				set y coord of {lavarising::game::point%arg 2%} to -64
 			message "{@P} Set &ay-coord &eof &apoint %arg 2% &eto &a%y coord of {lavarising::game::point%arg 2%}%"
 		else if arg 1 is "reset":
+			set {_time} to now
 			message "{@P} Resetting the &aLava Rising &earena"
 			LavaRising_Reset_Arena()
+			set {_diff} to difference between {_time} and now
 			message "{@P} The &aLava Rising &earena has been &eRESET!"
+			message "{@P} Time taken: &a%{_diff}%"
 		else if arg 1 is "spawn":
 			teleport player to {lavarising::game::spawn}
 			message "{@P} You've been teleported to &aspawn"
