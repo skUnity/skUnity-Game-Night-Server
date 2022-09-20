@@ -14,17 +14,73 @@
 options:
 	P: &c&lLava Rising &7»&e
 
+command /runtest:
+	trigger:
+		if skUnity_Is_Staff(player) is false:
+			message "{@P} You don't have permission to do that"
+			stop
+		set {_baefell} to "BaeFell" parsed as player
+		set {_consuela} to "nylhus" parsed as player 
+
+		make {_baefell} execute command "game select lava"
+		make {_baefell} execute command "map 1"
+		make {_baefell} execute command "ready"
+
+		make {_consuela} execute command "map 1"
+		make {_consuela} execute command "ready"
+
+		wait 1 second
+		make {_baefell} execute command "game start"
+
+
 on load:
 	GameManager_Register_Game("lava", "Lava Rising", script)
 
-	GameManager_Register_Vote("lava", "map", "office", "Office")
+	#GameManager_Register_Vote("lava", "map", "office", "Office")
 	GameManager_Register_Vote("lava", "map", "forest", "Forest")
-	GameManager_Register_Vote("lava", "map", "highrise", "High Rise")
+	#GameManager_Register_Vote("lava", "map", "highrise", "High Rise")
 
-	GameManager_Register_Vote("lava", "mode", "extreme", "Extreme Height")
-	GameManager_Register_Vote("lava", "mode", "spontanious", "Spontanious Lava")
-	GameManager_Register_Vote("lava", "mode", "extreme", "Extreme Modifiers")
-	GameManager_Register_Vote("lava", "mode", "fast", "Fast Rising")
+	#GameManager_Register_Vote("lava", "mode", "extreme", "Extreme Height")
+	#GameManager_Register_Vote("lava", "mode", "spontanious", "Spontanious Lava")
+	#GameManager_Register_Vote("lava", "mode", "extreme", "Extreme Modifiers")
+	#GameManager_Register_Vote("lava", "mode", "fast", "Fast Rising")
+	delete {lavarising::luck::*}
+
+	set {lavarising::luck::good::steak} to 16 steak
+	set {lavarising::luck::good::chicken} to 16 cooked chicken
+	set {lavarising::luck::good::carrots} to 16 carrots
+
+	set {lavarising::luck::good::item-helmet} to "item:netherite helmet:diamond helmet:iron helmet:gold helmet"
+	set {lavarising::luck::good::item-chestplate} to "item:netherite chestplate:diamond chestplate:iron chestplate:gold chestplate"
+	set {lavarising::luck::good::item-leggings} to "item:netherite leggings:diamond leggings:iron leggings:gold leggings"
+	set {lavarising::luck::good::item-boots} to "item:netherite boots:diamond boots:iron boots:gold boots"
+
+	set {lavarising::luck::good::item-sword} to "item:netherite sword:diamond sword:iron sword:stone sword"
+	set {lavarising::luck::good::item-axe} to "item:netherite axe:diamond axe:iron axe:stone axe"
+	set {lavarising::luck::good::item-shovel} to "item:netherite shovel:diamond shovel:iron shovel:stone shovel"
+	set {lavarising::luck::good::item-pickaxe} to "item:netherite pickaxe:diamond pickaxe:iron pickaxe:stone pickaxe"
+
+	set {lavarising::luck::good::enchant-helmet} to "enchant:helmet:aqua affinity:blast protection:curse of binding:fire protection:mending:projectile protection:protection:respiration:thorns:unbreaking"
+	set {lavarising::luck::good::enchant-chestplate} to "enchant:chestplate:blast protection:curse of binding:fire protection:mending:projectile protection:protection:thorns:unbreaking"
+	set {lavarising::luck::good::enchant-leggings} to "enchant:leggings:blast protection:curse of binding:fire protection:mending:projectile protection:protection:swift sneak:thorns:unbreaking"
+	set {lavarising::luck::good::enchant-boots} to "enchant:boots:blast protection:curse of binding:depth strider:feather falling:fire protection:frost walker:soul speed:mending:projectile protection:protection:thorns:unbreaking"
+
+	set {lavarising::luck::good::blocks-1} to 32 cobblestone
+	set {lavarising::luck::good::blocks-2} to 32 deepslate
+	set {lavarising::luck::good::blocks-3} to 6 obsidian
+	set {lavarising::luck::good::blocks-4} to 64 dirt
+
+	set {lavarising::luck::bad::lava} to "block:lava"
+	set {lavarising::luck::bad::cage} to "cage"
+	set {lavarising::luck::bad::item} to "tool:air"
+	set {lavarising::luck::bad::bad-blocks-1} to 32 oak leaves
+	set {lavarising::luck::bad::bad-blocks-2} to 32 oak planks
+	set {lavarising::luck::bad::bad-blocks-3} to 12 oak logs
+
+	set {lavarising::luck::chests::none} to 1
+	set {lavarising::luck::chests::supporter} to 3
+	set {lavarising::luck::chests::moderator} to 3
+	set {lavarising::luck::chests::admin} to 3
 
 	delete {lavarising::setup::*}
 	delete {lavarising::alive::*}
@@ -33,25 +89,80 @@ on command:
 	if GameManager_Check_Starting(player, command, arguments, "lava") is true:
 		set {lavarising::currentarena} to GameManager_Get_Winning_Key("map")
 		set {lavarising::pvp} to false
+		set {lavarising::setup::status} to "playing"
 		# Lava Rising is starting
-		loop {lobby::players::*}:
-			set {lavarising::alive::%loop-value%} to loop-value
+		loop all players:
+			teleport loop-player to {lavarising::game::arena::%{lavarising::currentarena}%::spawn}
+			if {lobby::players::%uuid of loop-player%} is set:
+				set {lavarising::alive::%loop-value%} to loop-value
+				set gamemode of loop-player to adventure
+			else:
+				message "{@P} Even though you're not playing, you've been teleported to the arena to spectate." to loop-player
+				set gamemode of loop-player to spectator
+
+			if skUnity_Get_Rank(loop-player) is "none":
+				give 1 of stone pickaxe to loop-player
+				give 1 of stone axe to loop-player
+				give 1 of stone shovel to loop-player
+			else if skUnity_Get_Rank(loop-player) is "supporter" or "moderator":
+				give 1 of iron pickaxe to loop-player
+				give 1 of iron axe to loop-player
+				give 1 of iron shovel to loop-player
+			else if skUnity_Get_Rank(loop-player) is "admin":
+				give 1 of diamond pickaxe to loop-player
+				give 1 of diamond axe to loop-player
+				give 1 of diamond shovel to loop-player
+
+			set {_item} to ender chest
+			set name of {_item} to "&e&lLUCKY BLOCK!"
+			set lore of {_item} to "&aPlace me and break me for some good luck... or &cbad luck..."
+			set metadata value "luckyblock" of {_item} to "true"
+			give loop-player 1 of {_item}
+
+		#loop {lobby::players::*}:
+			#set {lavarising::alive::%loop-value%} to loop-value
+			#set gamemode of player to adventure
 			#teleport loop-value to {lavarising::game::spawn}
-			teleport loop-value to {lavarising::game::arena::%{lavarising::currentarena}%::spawn}
+			#teleport loop-value to {lavarising::game::arena::%{lavarising::currentarena}%::spawn}
 		# 10 seconds from when this detected to when the game starts
+		LavaRising_Set_Arena_WorldBorder({lavarising::currentarena})
 		wait 10 seconds
 
 		GameManager_Set_Game_Status("playing")
+
 		loop {lobby::players::*}:
+			broadcast "setting %loop-value% to survival"
 			set gamemode of loop-value to survival
-		LavaRising_Lava(-63)
+		LavaRising_Start_LuckyBlocks()
+		LavaRising_Lava({lavarising::game::arena::%{lavarising::currentarena}%::miny})
+
+on join:
+	if GameManager_Is_Game("lava") is true:
+		if {lavarising::setup::status} is "playing":
+			set gamemode of player to spectator
+			teleport player to {lavarising::game::arena::%{lavarising::currentarena}%::spawn}
 
 on respawn:
 	if GameManager_Is_Game("lava") is true:
-		GameManager_Teleport_To_Spawn(player)
+		wait 1 second
+		extinguish player
+		heal player
+		if {lavarising::setup::status} is "playing":
+			set gamemode of player to spectator
+			teleport player to {lavarising::game::arena::%{lavarising::currentarena}%::spawn}
+		else:
+			GameManager_Teleport_To_Spawn(player)
 
 on death:
 	if GameManager_Is_Game("lava") is true:
+		extinguish victim
+		heal victim
+		set death message to ""
+		if {lavarising::alive::%victim%} is not set:
+			stop
+		if {lavarising::setup::status} is "ended":
+			delete {lavarising::alive::%victim%}
+			stop
 		if victim is player:
 			delete {lavarising::alive::%victim%}
 			broadcast "{@P} %victim% has died!"
@@ -63,16 +174,22 @@ function LavaRising_Check_Ended():
 	if {lavarising::stop} is set:
 		set {_true} to true
 	if {_true} is set:
+		LavaRising_Reset_Arena_WorldBorder({lavarising::currentarena})
 		set {lavarising::setup::status} to "ended"
 		loop {lavarising::alive::*}:
 			set {_winner} to loop-value
 		GameManager_Game_Ended({_winner})
 		wait 2 seconds
 		LavaRising_Reset_Arena()
+		wait 2 seconds
 		delete {lavarising::currentarena}
 
 function LavaRising_Lava(y: integer):
 	if {lavarising::setup::status} is "ended":
+		stop
+	if {_y} is greater than or equal to {lavarising::game::arena::%{lavarising::currentarena}%::maxy}:
+		set {lavarising::pvp} to true
+		broadcast "{@P} PvP has now been &aenabled! &eFight to the death!"
 		stop
 	LavaRising_Rise_Lava({_y})
 
@@ -81,7 +198,7 @@ function LavaRising_Rise_Lava(y: integer):
 	if {lavarising::setup::status} is "ended":
 		stop
 	add 1 to {_y}
-	broadcast "{@P} The lava is at &c%{_y}%!"
+	send action bar "{@P} The lava is at &c%{_y}%!" to all players
 	set {_point1} to {lavarising::game::arena::%{lavarising::currentarena}%::point1}
 	set y coord of {_point1} to {_y}
 	set {_point2} to {lavarising::game::arena::%{lavarising::currentarena}%::point2}
@@ -92,31 +209,231 @@ function LavaRising_Rise_Lava(y: integer):
 			set loop-block to lava
 	LavaRising_Lava({_y})
 
+function LavaRising_Start_LuckyBlocks():
+	while {lavarising::setup::status} is not "ended":
+		loop all players:
+			if {lavarising::setup::status} is "ended":
+				stop
+			chance of 45%:
+				set {_rank} to skUnity_Get_Rank(loop-player)
+				set {_count} to random integer between 1 and {lavarising::luck::chests::%{_rank}%}
+				set {_item} to ender chest
+				set name of {_item} to "&e&lLUCKY BLOCK!"
+				set lore of {_item} to "&aPlace me and break me for some good luck... or &cbad luck..."
+				set metadata value "luckyblock" of {_item} to "true"
+				give loop-player {_count} of {_item}
+				send "{@P} You've been given &a%{_count}% &e&lLUCKY BLOCKS!" to loop-player			
+		wait 15 seconds
+
+on place of ender chest:
+	if GameManager_Is_Game("lava") is true:
+		if tool of player is an ender chest:
+			if name of tool of player is "&e&lLUCKY BLOCK!":
+				set {lavarising::luckyblocks::%event-location%} to event-location
+
+on place:
+	if GameManager_Is_Game("lava") is true:
+		set {_y} to {lavarising::game::arena::%{lavarising::currentarena}%::maxy} + 1
+		if y coord of event-location is greater than or equal to {_y}:
+			message "{@P} You're at the max height! You've gotta try and survive up here!"
+			cancel event
+
+on right click on ender chest:
+	if GameManager_Is_Game("lava") is true:
+		if {lavarising::luckyblocks::%event-location%} is set:
+			delete {lavarising::luckyblocks::%event-location%}
+			# good luck
+			if chance of 85%:
+				message "{@P} You've recieved some good luck..."
+				set {_diamondchance} to random integer between 1 and 5
+				loop {_diamondchance} times:
+					set {_item} to random element out of {lavarising::luck::good::*}
+					if {_item} starts with "enchant":
+						set {_splititem::*} to {_item} split at ":"
+						set {_playeritemtype} to {_splititem::2}
+						if {_splititem::2} is "helmet":
+							set {_playeritem} to helmet of player
+						else if {_splititem::2} is "chestplate":
+							set {_playeritem} to chestplate of player
+						else if {_splititem::2} is "leggings":
+							set {_playeritem} to leggings of player
+						else if {_splititem::2} is "boots":
+							set {_playeritem} to boots of player
+						if {_playeritem} is not set:
+							continue loop
+						delete {_splititem::1}
+						delete {_splititem::2}
+						set {_enchantamount} to random integer between 1 and 2
+						loop {_enchantamount} times:
+							set {_enchant} to random element out of {_splititem::*} parsed as enchantment
+							set {_enchantlevel} to random integer between 1 and 5
+							enchant {_playeritem} with {_enchant}
+							set enchantment level of {_enchant} on {_playeritem} to {_enchantlevel}
+							message "{@P} Enchantment &a%{_enchant}% %{_enchantlevel}% &eapplied to your &a%{_playeritem}%"
+							if {_playeritemtype} is "helmet":
+								set helmet of player to {_playeritem}
+							else if {_playeritemtype} is "chestplate":
+								set chestplate of player to {_playeritem}
+							else if {_playeritemtype} is "leggings":
+								set leggings of player to {_playeritem}
+							else if {_playeritemtype} is "boots":
+								set boots of player to {_playeritem}
+					else if {_item} starts with "item":
+						set {_splititem::*} to {_item} split at ":"
+						delete {_splititem::1}
+						set {_item} to random element out of {_splititem::*}
+						drop ({_item} parsed as item) at event-location
+						message "{@P} &a%{_item}% &edropped!"
+					else:
+						drop {_item} at event-location
+						message "{@P} &a%{_item}% &edropped!"
+			else:
+				message "{@P} &cOuh oh! You've got bad luck..."
+				set {_item} to random element out of {lavarising::luck::bad::*}
+				if {_item} is "cage":
+					set {_loc} to location of player
+					subtract 1 from y coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					subtract 1 from x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					subtract 1 from z coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					add 1 to x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					add 1 to x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					add 1 to z coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					add 1 to z coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					subtract 1 from x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+					subtract 1 from x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to gold block
+
+					add 1 to y coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					add 1 to x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					add 1 to x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					subtract 1 from z coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					subtract 1 from z coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					subtract 1 from x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					subtract 1 from x coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+					add 1 to z coord of {_loc}
+					if block at {_loc} is not barrier:
+						set block at {_loc} to iron bar
+
+					loop 2 times:
+						add 1 to z coord of {_loc}
+						add 1 to y coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						add 1 to x coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						add 1 to x coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						subtract 1 from z coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						subtract 1 from z coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						subtract 1 from x coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						subtract 1 from x coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+						add 1 to z coord of {_loc}
+						if block at {_loc} is not barrier:
+							set block at {_loc} to iron bar
+
+					set block 25 blocks above location of player to anvil
+					set block 26 blocks above location of player to anvil
+					message "{@P} &c&lWhat's that above you..."
+				else if {_item} is "lava":
+					set event-block to lava
+					message "{@P} &c&lThat lucky block turned to lava!"
+				else if {_item} is "tool:air":
+					set tool of player to air
+					message "{@P} &c&lYour tool was destroyed!"
+
+				
+
+on right click on ender chest:
+	if GameManager_Is_Game("lava") is true:
+		cancel event
+
 function LavaRising_Reset_Arena():
-	loop blocks within {lavarising::game::arena::%{lavarising::currentarena}%::point1} and {lavarising::game::arena::%{lavarising::currentarena}%::point2}:	
+	LavaRising_Reset_Specific_Arena({lavarising::currentarena})
+
+function LavaRising_Reset_Specific_Arena(arena: string):
+	delete {lavarising::luckyblocks::*}
+	delete {lavarising::stop}
+	loop blocks within {lavarising::game::arena::%{_arena}%::point1} and {lavarising::game::arena::%{_arena}%::point2}:	
 		add 1 to {_c}
 		if {_c} is 10000:
 			wait 1 second
-		if {lavarising::game::arena::%{lavarising::currentarena}%::locs::%location of loop-block%} is not set:
+		if {lavarising::game::arena::%{_arena}%::locs::%location of loop-block%} is not set:
 			set loop-block to air
 		else:
-			if {lavarising::game::arena::%{lavarising::currentarena}%::locs::%location of loop-block%} is peony or top-half peony:
+			if {lavarising::game::arena::%{_arena}%::locs::%location of loop-block%} is peony or top-half peony:
 				set loop-block to air
 			else:
-				set loop-block to {lavarising::game::arena::%{lavarising::currentarena}%::locs::%location of loop-block%}
+				set loop-block to {lavarising::game::arena::%{_arena}%::locs::%location of loop-block%}
+	LavaRising_Reset_Arena_WorldBorder({_arena})
+	loop all players:
+		extinguish loop-player
+		heal loop-player
+		clear inventory of loop-player
 
 function LavaRising_Get_Midpoint(arena: string) :: location:
 	set {_midpoint} to {lavarising::game::arena::%{_arena}%::point1}
 	set x coord of {_midpoint} to x coord of {lavarising::game::arena::%{_arena}%::point1} + x coord of {lavarising::game::arena::%{_arena}%::point2}
 	set x coord of {_midpoint} to x coord of {_midpoint} / 2
-	set x coord of {_midpoint} to round(x coord of {_midpoint})
-	add 0.5 to x coord of {_midpoint}
-
 	set z coord of {_midpoint} to z coord of {lavarising::game::arena::%{_arena}%::point1} + z coord of {lavarising::game::arena::%{_arena}%::point2}
 	set z coord of {_midpoint} to z coord of {_midpoint} / 2
-	set z coord of {_midpoint} to round(z coord of {_midpoint})
-	add 0.5 to z coord of {_midpoint}
 	return {_midpoint}
+
+function LavaRising_Set_Arena_WorldBorder(arena: string):
+	set {_loc} to {lavarising::game::arena::%{_arena}%::point1}
+	set {_world} to world of {_loc}
+
+	set {_centre} to LavaRising_Get_Midpoint({_arena})
+
+	{_world}.getWorldBorder().setCenter(x coord of {_centre}, z coord of {_centre})
+
+	set {_bordersize} to difference between x coord of {lavarising::game::arena::%{_arena}%::point1} and x coord of {lavarising::game::arena::%{_arena}%::point2}
+	{_world}.getWorldBorder().setSize({_bordersize} + 1)
+
+function LavaRising_Reset_Arena_WorldBorder(arena: string):
+	set {_loc} to {lavarising::game::arena::%{_arena}%::point1}
+	set {_world} to world of {_loc}
+	{_world}.getWorldBorder().setSize(30000000)
 
 command /lavarising [<text>] [<text>] [<text>]:
 	trigger:
@@ -139,13 +456,25 @@ command /lavarising [<text>] [<text>] [<text>]:
 			else:
 				message "{@P} Which arena do you want to set the spawn point of?"
 		else if arg 1 is "setarena":
+			if arg 3 is "movepoints":
+				make player execute command "lavarising movepoint 1 down"
+				make player execute command "lavarising movepoint 2 up"
 			if arg 2 is not set:
 				message "{@P} Which arena do you want to set the spawn point of?"
 				stop
 			set {lavarising::game::arena::%arg 2%::point1} to {lavarising::game::point1}
 			set {lavarising::game::arena::%arg 2%::point2} to {lavarising::game::point2}
+
+			if y coord of {lavarising::game::arena::%arg 2%::point1} is greater than y coord of {lavarising::game::arena::%arg 2%::point2}:
+				set {lavarising::game::arena::%arg 2%::maxy} to y coord of {lavarising::game::arena::%arg 2%::point1}
+				set {lavarising::game::arena::%arg 2%::miny} to y coord of {lavarising::game::arena::%arg 2%::point2}
+			else:
+				set {lavarising::game::arena::%arg 2%::maxy} to y coord of {lavarising::game::arena::%arg 2%::point2}
+				set {lavarising::game::arena::%arg 2%::miny} to y coord of {lavarising::game::arena::%arg 2%::point1}
+
+			message "{@P} Clearing any previous arena data for &a%arg 2%"
 			delete {lavarising::game::arena::%arg 2%::locs::*}
-			message "{@P} Setting up the &aLava Rising &earena!"
+			message "{@P} Setting up the &aLava Rising &earena: &a%arg 2%"
 			set {_c} to 0
 			loop blocks within {lavarising::game::point1} and {lavarising::game::point2}:
 				if loop-block is not air or black stained glass:
@@ -154,10 +483,10 @@ command /lavarising [<text>] [<text>] [<text>]:
 					if {_c} is 5000:
 						wait 1 second
 						message "{@P} Sorry... just waiting 1 second. "
-						message "{@P} Processed: &a%size of {lavarising::game::arena::locs::*}%"
+						message "{@P} Processed: &a%size of {lavarising::game::arena::%arg 2%::locs::*}%"
 						message "{@P} Last y-coord: &a%y coord of location of loop-block%"
 						set {_c} to 0
-			message "{@P} The &aLava Rising &earena has been setup!"
+			message "{@P} The &aLava Rising &earena &e%arg 2% has been setup!"
 			message "{@P} Total size: &e%size of {lavarising::game::arena::%arg 2%::locs::*}%"
 		else if arg 1 is "movepoint":
 			if arg 3 is "up":
@@ -175,12 +504,6 @@ command /lavarising [<text>] [<text>] [<text>]:
 		else if arg 1 is "spawn":
 			teleport player to {lavarising::game::arena::%arg 2%::spawn}
 			message "{@P} You've been teleported to &aspawn"
-		else if arg 1 is "worldborder":
-			if arg 2 is "centre":
-				
-			else if arg 2 is "setsize":
-				message "HI"
-
 
 on left click:
 	if {lavarising::setup::%uuid of player%} is set:
@@ -194,14 +517,15 @@ on right click:
 		message "{@P} Set the point 2 to &a%event-location%"
 		cancel event
 
-on hunger change:
+on hunger level change:
 	if GameManager_Is_Game("lava") is true:
 		cancel event
 
 on damage:
 	if GameManager_Is_Game("lava") is true:
-		if GameManager_Get_Game_Status() is "starting":
-			if attacker is player:
-				if victim is player:
-					if {lavarising::pvp} is false:
-						cancel event
+		if attacker is player:
+			if victim is player:
+				if {lavarising::pvp} is false:
+					cancel event
+				else:
+					message "{@P} PvP isn't enabled until the top level!" to attacker

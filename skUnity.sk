@@ -4,15 +4,14 @@
 #	(c) All Rights Reserved
 #
 
+options:
+	P: &c&lskUnity &7»&e
+
 on load:
 	set {skunity::colours::admin} to "<##ff59ce>"
 	set {skunity::colours::moderator} to "<##9089ff>"
 	set {skunity::colours::supporter} to "<##fd7c58>"
 	set {skunity::colours::none} to "<##ffffff>"
-
-	# BaeFell
-	set {skunity::players::5de82efb-927e-4153-ad05-8dbf361a4a91::staff} to true
-	set {skunity::players::5de82efb-927e-4153-ad05-8dbf361a4a91::rank} to "admin"
 
 function skUnity_Get_Rank(player: player) :: string:
 	set {_uuid} to uuid of {_player}
@@ -23,3 +22,21 @@ function skUnity_Get_Rank(player: player) :: string:
 function skUnity_Get_Coloured_Text(player: player, message: string) :: string:
 	set {_rank} to skUnity_Get_Rank({_player})
 	return "%{skunity::colours::%{_rank}%}%%{_message}%"
+
+function skUnity_Setup_User_Data(player: player):
+	set {_uuid} to uuid of {_player}
+	set {skunity::players::%{_uuid}%::rank} to "admin"
+	set {skunity::connected::%{_uuid}%::skunity::is_staff} to true
+	set {skunity::connected::%{_uuid}%::skunity::is_admin} to true
+
+on quit:
+	delete {skunity::connected::%uuid of player%::skunity::is_staff}
+	delete {skunity::connected::%uuid of player%::skunity::is_admin}
+	delete {skunity::connected::%uuid of player%::skunity::is_moderator}
+	delete {skunity::connected::%uuid of player%::rank}
+
+function skUnity_Is_Staff(player: player) :: boolean:
+	set {_uuid} to uuid of {_player}
+	if {skunity::connected::%{_uuid}%::skunity::is_staff} is true:
+		return true
+	return false

@@ -46,6 +46,7 @@ on join:
 
 on quit:
 	delete {lobby::players::%uuid of player%}
+	set leave message to ""
 
 function GameManager_Is_Game(game: string) :: boolean:
 	if {_game} is GameManager_Get_Game_Key():
@@ -83,17 +84,19 @@ function GameManager_Check_Starting(player: player, command: string, arguments: 
 function GameManager_Game_Ended(winner: player):
 	loop all players:
 		set gamemode of loop-player to adventure
+		extinguish loop-player
+		heal loop-player
+		clear inventory of loop-player
 		GameManager_Teleport_To_Spawn(loop-player)
+
+	delete {lobby::players::*}
 
 	GameManager_Broadcast("&a%GameManager_Get_Game()% &ehas finished! &a%{_winner}% &ewas the winner!")
 	GameManager_Set_Game_Status("waiting")
 
 
 function GameManager_Is_Staff(player: player) :: boolean:
-	set {_uuid} to uuid of {_player}
-	if {staff::%{_uuid}%} is set:
-		return true
-	return false
+	return skUnity_Is_Staff({_player})
 
 function GameManager_Broadcast(message: string, two: string = "", three: string = "", four: string = "", five: string = ""):
 	broadcast "{@P} "
@@ -214,8 +217,8 @@ command /game [<text>] [<text>]:
 			loop 9 times:
 				set {_c} to {_c} - 1
 				wait 1 second
-				GameManager_Broadcast("&a%GameManager_Get_Game()% &ewill start in &e%{_c}% seconds")
-			GameManager_Broadcast("&a%GameManager_Get_Game()% &eis now starting!")
+				GameManager_Broadcast("&a%GameManager_Get_Game()% &ewill start in &a%{_c}% seconds")
+			GameManager_Broadcast("&a%GameManager_Get_Game()% &eis now &astarting!")
 		else if arg 1 is "stop":
 			delete {game::selected-game}
 			message "{@P} Stopped selected game"
@@ -250,6 +253,39 @@ command /vote [<text>] [<integer>]:
 		else:
 			message "{@P} Voting isn't open at the moment"
 
+command /map [<integer>]:
+	trigger:
+		if GameManager_Get_Game_Status() is "voting":
+			if arg 1 is set:
+				if {game::votes::map::%arg 1%} is set:
+					if {game::votes::player::%uuid of player%::map} is set:
+						subtract 1 from {game::votes::map::%{game::votes::player::%uuid of player%::map}%}
+					set {game::votes::player::%uuid of player%::map} to arg 1
+					add 1 to {game::votes::map::%arg 1%}
+					GameManager_Voting_Announce()
+				else:
+					message "{@P} Invalid option. Valid options between &a1 &eand &a%size of {game::games::%{game::selected-game}%::votes::map::votelist::*}%"
+			else:
+				message "{@P} Invalid argument. Valid command: &a/map <number>"
+		else:
+			message "{@P} Voting isn't open at the moment"
+
+command /mode [<integer>]:
+	trigger:
+		if GameManager_Get_Game_Status() is "voting":
+			if arg 1 is set:
+				if {game::votes::mode::%arg 1%} is set:
+					if {game::votes::player::%uuid of player%::mode} is set:
+						subtract 1 from {game::votes::mode::%{game::votes::player::%uuid of player%::mode}%}
+					set {game::votes::player::%uuid of player%::mode} to arg 1
+					add 1 to {game::votes::mode::%arg 1%}
+					GameManager_Voting_Announce()
+				else:
+					message "{@P} Invalid option. Valid options between &a1 &eand &a%size of {game::games::%{game::selected-game}%::votes::mode::votelist::*}%"
+			else:
+				message "{@P} Invalid argument. Valid command: &a/mode <number>"
+		else:
+			message "{@P} Voting isn't open at the moment"
 
 command /ready:
 	trigger:
@@ -261,3 +297,23 @@ command /ready:
 		else:
 			GameManager_Broadcast("%player% has readied up (%size of {lobby::players::*}% players ready)")
 
+on break:
+	if GameManager_Get_Game_Status() is not "playing":
+		if skUnity_Is_Staff(player) is false:
+			cancel event
+
+on weather change:
+	cancel event
+	set weather to clear
+
+on spawn:
+	if spawn reason is natural:
+		cancel event
+
+on hunger level change:
+	if GameManager_Get_Game_Status() is not "playing":
+		cancel event 
+
+on damage:
+	if GameManager_Get_Game_Status() is not "playing":
+		cancel event
