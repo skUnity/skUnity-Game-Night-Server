@@ -20,8 +20,6 @@ options:
 
 on load:
 	# Game Manger
-	set {staff::LimeGlass} to true
-
 	GameManager_Register_Game("capture", "Capture The Point", script)
 	if {capture::lobby} is not set:
 		set {capture::lobby} to spawn of world {@world}
@@ -751,6 +749,7 @@ on item despawn:
 		cancel event
 
 on pickup of tnt block:
+	event-world is world {@world}
 	cancel event
 	metadata "capture-mine" of event-dropped item is not captureGetTeam(player)
 	{game::status} is "playing"
