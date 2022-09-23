@@ -1,18 +1,30 @@
 
 # Capture The Point by LimeGlass
-# Version 0.0.0 (Snapshot given to BaeFell)
+# Version 1.0
+#
+# Addons required:
+# Skacket 1.0.13
+# ProtocolLib
+# Skellett
+# SkQuery
+# Skript (Tested on 2.6.3)
+#
 
 options:
-	# The amount of stages a flag can have from white wool to team colour
-	flag-stages: 4
 	prefix: &8[&a&lCTP&8] &f
+	# The world the game is played in
+	world: "Capture"
+	# Teams are the Skript colour type
 	team1: orange
 	team2: purple
 
 on load:
+	# Game Manger
+	set {staff::LimeGlass} to true
+
 	GameManager_Register_Game("capture", "Capture The Point", script)
 	if {capture::lobby} is not set:
-		set {capture::lobby} to spawn of world "Capture"
+		set {capture::lobby} to spawn of world {@world}
 	if GameManager_Get_Game_Key() is "capture":
 		{game::status} is not "ending"
 		set {game::status} to "waiting"
@@ -21,27 +33,35 @@ on load:
 
 on player world change:
 	# Reset the player when they get teleported to another world. Aka spectator or whatever.
-	if event-world was world "Capture":
+	if event-world was world {@world}:
 		set gamemode of player to survival
 		clear player's inventory
 		heal player
 		feed player
 		stop
-	the event-world will be world "Capture"
+	the event-world will be world {@world}
 	GameManager_Get_Game_Key() is "capture"
 	if {game::status} is "playing":
 		set gamemode of player to spectator
 		teleport player to {capture::arena::%{capture::temp::arena}%::spectatorspawn}
 		message "{@prefix}&cThe game is currently being played, you've been put into spectator mode."
+		if {capture::temp::players::*} doesn't contain player:
+			add player to {capture::temp::players::*}
 		stop
 
 on join:
 	if GameManager_Get_Game_Key() is "capture":
 		teleport player to {capture::lobby}
+		if {game::status} is "playing":
+			set gamemode of player to spectator
+			teleport player to {capture::arena::%{capture::temp::arena}%::spectatorspawn}
+			message "{@prefix}&cThe game is currently being played, you've been put into spectator mode."
+			add player to {capture::temp::players::*}
+			stop
 		clear inventory of player
 
 on unload:
-	loop all entities in world "Capture":
+	loop all entities in world {@world}:
 		metadata "capture-inventory-reset" of loop-entity is true
 		delete loop-entity
 	if {capture::temp::arena} is not set:
@@ -60,7 +80,7 @@ function openCaptureVotingMenu(player: player):
 		wait 5 ticks
 
 on right click with nether star:
-	world of player is world "Capture"
+	world of player is world {@world}
 	{game::status} is "starting"
 	openCaptureVotingMenu(player)
 
@@ -126,7 +146,7 @@ on quit:
 	reset tablist name of player
 
 on death of player:
-	event-world is world "Capture"
+	event-world is world {@world}
 	if attacker is a player:
 		if {capture::temp::{@team1}::*} contains attacker:
 			add 50 to {capture::temp::points::{@team1}}
@@ -156,25 +176,25 @@ on death of player:
 	send title " " with subtitle "&aRespawning now" to victim for 2 seconds with fadein 0 ticks and fadeout a second
 
 on place:
-	event-world is world "Capture"
+	event-world is world {@world}
 	if GameManager_Is_Staff(player) is true:
 		{game::status} is not "playing"
 		stop
 	cancel event
 
 on break:
-	event-world is world "Capture"
+	event-world is world {@world}
 	if GameManager_Is_Staff(player) is true:
 		{game::status} is not "playing"
 		stop
 	cancel event
 
 on hunger meter change:
-	event-world is world "Capture"
+	event-world is world {@world}
 	set food level of player to 10
 
 on right click with beetroot soup:
-	event-world is world "Capture"
+	event-world is world {@world}
 	cancel event
 	play sound "ENTITY_GENERIC_EAT"
 	set slot player's current hotbar slot of player to air
@@ -238,7 +258,6 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 		message "{@prefix}&b&lGame is starting in %{_time}%!" to {lobby::players::*}
 		wait a second
 		subtract a second from {_time}
-	set {capture::arenas::%{capture::temp::arena}%::flags::*} to white wool
 	loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
 		add {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*} to {_captures::*}
 	set {capture::temp::players::*} to {lobby::players::*}
@@ -313,7 +332,6 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 		captureResetPlayer({_player}, true)
 		remove {_player} from {_players::*}
 		set {_toggle} to not {_toggle}
-	captureFlagUpdate({capture::temp::arena})
 	# Powerups load
 	clear {capture::temp::powerups::*} and {capture::temp::powerup::*}
 	add tnt block named "&c&lProximity Mine" with lore "&7Drop the tnt block to set" and "&7the proximity mine active" to {capture::temp::powerups::*}
@@ -480,20 +498,42 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 			add 2 * size of {capture::temp::captures::{@team1}::*} to {capture::temp::points::{@team1}}
 		if {capture::temp::captures::{@team2}::*} is set:
 			add 2 * size of {capture::temp::captures::{@team2}::*} to {capture::temp::points::{@team2}}
-		add 1 to {_flagUpdate}
-		if {_flagUpdate} is greater than 45:
-			set {_flagUpdate} to 0
-			captureFlagUpdate({capture::temp::arena})
+		if {capture::temp::points::{@team2}} is greater or equal to 15000:
+			loop {capture::temp::{@team2}::*}:
+				GameManager_Add_Win(loop-value)
+			send title "<{@team2}>&lTeam {@team2} are the winners!" with subtitle "&fThanks for playing!" to {capture::temp::players::*} for 4 seconds with fadein 0 ticks and fadeout 2 seconds
+			captureEndGame({capture::temp::arena}, {@team2})
+		else if {capture::temp::points::{@team1}} is greater or equal to 15000:
+			loop {capture::temp::{@team1}::*}:
+				GameManager_Add_Win(loop-value)
+			send title "<{@team1}>&lTeam {@team1} are the winners!" with subtitle "&fThanks for playing!" to {capture::temp::players::*} for 4 seconds with fadein 0 ticks and fadeout 2 seconds
+			captureEndGame({capture::temp::arena}, {@team1})
+		loop {capture::temp::players::*}:
+			gamemode of loop-value is spectator
+			distance between {capture::arena::%{capture::temp::arena}%::spectatorspawn} and loop-value is greater than 1000:
+				teleport loop-value to {capture::arena::%{capture::temp::arena}%::spectatorspawn}
 
-function captureEndGame(arena: string):
-	message "&6&lThanks for playing Capture The Point!" to {capture::temp::players::*}
+function captureEndGame(arena: string, colour: colour = white):
+	message " ", "&a&lThanks for playing Capture The Point by Lime!" and " " to {capture::temp::players::*}
 	set {game::status} to "ending"
-	captureFlagUpdate({_arena})
-	# display health in tab to everyone for everyone
-	# TODO fireworks
+	loop {capture::temp::players::*}:
+		gamemode of loop-value is not spectator
+		add location 3 above loop-value to {_locations::*}
+		loop 5 times:
+			add location of random element out of all blocks in radius 15 around loop-value-1 to {_locations::*}
+		loop 5 times:
+			add location 10 above random element out of all blocks in radius 15 around loop-value-1 to {_locations::*}
+	loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
+		add location of first element out of {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*} to {_locations::*}
+		add location 10 above first element out of {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*} to {_locations::*}
+		add location of random element out of all blocks in radius 15 around first element out of {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*} to {_locations::*}
+	set {_time} to 10 seconds
 	if {capture::temp::players::*} is not empty:
-		wait 5 seconds
-	loop all entities in world "Capture":
+		while {_time} is greater than 0 seconds:
+			subtract 2 ticks from {_time}
+			wait 2 ticks
+			launch ball large coloured {_colour} at random element out of {_locations::*} with duration 2
+	loop all entities in world {@world}:
 		if metadata "capture-inventory-reset" of loop-entity is true:
 			delete loop-entity
 		else if metadata "capture-earn-points" of loop-entity is true:
@@ -514,63 +554,6 @@ function captureEndGame(arena: string):
 	set gamemode of {capture::temp::players::*} to survival
 	delete {capture::temp::*}
 	set {game::status} to "waiting"
-
-function captureFlagUpdate(arena: string):
-	if {game::status} is not "playing":
-		loop {capture::arenas::%{_arena}%::flags::*}:
-			set block at loop-value to white wool
-			chance of 20%:
-				wait a tick
-		stop
-	if {capture::temp::points::{@team1}} or {capture::temp::points::{@team2}} is not set:
-		loop {capture::arenas::%{_arena}%::flags::*}:
-			set block at loop-value to white wool
-			chance of 20%:
-				wait a tick
-		stop
-	if {capture::temp::points::{@team1}} is greater than {capture::temp::points::{@team2}}:
-		set {_wool} to {@team1} wool
-		set {_points} to {capture::temp::points::{@team1}}
-		set {_captures} to size of {capture::temp::captures::{@team1}::*}
-	else:
-		set {_wool} to {@team2} wool
-		set {_points} to {capture::temp::points::{@team2}}
-		set {_captures} to size of {capture::temp::captures::{@team2}::*}
-	# Game is complete
-	if {_points} is 15000:
-		loop {capture::arenas::%{_arena}%::flags::*}:
-			set block at loop-value to {_wool}
-			chance of 20%:
-				wait a tick
-		stop
-	# A team is dominating with all points captured.
-	if {_captures} is size of {capture::arenas::%{_arena}%::captures::*}:
-		loop {capture::arenas::%{_arena}%::flags::*}:
-			set block at loop-value to {_wool}
-			chance of 20%:
-				wait a tick
-		stop
-	set {_stage} to {@flag-stages}
-	set {_last} to 0
-	# Figure out amount of flag to cover in colour.
-	# Stage 1 is nearing the finish of the game.
-	loop integers between {@flag-stages} and 1:
-		if {_points} is between {_last} and {_points} / loop-number:
-			set {_stage} to loop-number
-		set {_last} to {_points} / loop-number
-	set {_size} to size of {capture::arenas::%{_arena}%::flags::*}
-	set {_amount} to {_size} / ({_stage} + 0.3)
-	loop {capture::arenas::%{_arena}%::flags::*}:
-		set block at loop-value to white wool
-		chance of 20%:
-			wait a tick
-	set {_blocks::*} to {capture::arenas::%{_arena}%::flags::*}
-	loop {_amount} times:
-		set {_block} to a random element out of {_blocks::*}
-		remove {_block} from {_blocks::*}
-		set block at {_block} to {_wool}
-		chance of 15%:
-			wait a tick
 
 function capturePowerup(player: player, rigged: number = 0):
 	if {_rigged} is 0:
@@ -611,19 +594,12 @@ function capturePowerup(player: player, rigged: number = 0):
 		send action bar {_description} to {_player}
 		wait 2 seconds
 
-# For testing only
-on load:
-	clear {capture::temp::powerups::*} and {capture::temp::powerup::*}
-	add tnt block named "&c&lProximity Mine" with lore "&7Drop the tnt block to set" and "&7the proximity mine active" to {capture::temp::powerups::*}
-	add stone axe named "&2&lJump Slam" with lore "&7Right clicking on will launch", "&7you into the air you're facing, and" and "&7grand slam down creating an explosion on landing." to {capture::temp::powerups::*}
-	add string named "&f&lSmoke Bomb" with lore "&7Drop at a location to create a smoke bomb" to {capture::temp::powerups::*}
-
 on left click with stone axe:
 	metadata "capture-grand-slam" of player is true
 	delete metadata "capture-grand-slam" of player
 
 on right click:
-	event-world is world "Capture"
+	event-world is world {@world}
 	{game::status} is "playing"
 	cancel event
 	player's current hotbar slot is 8
@@ -679,7 +655,7 @@ on right click:
 		message "{@prefix}&aDrop to place a smoke bomb at a location."
 
 on drop:
-	event-world is world "Capture"
+	event-world is world {@world}
 	if player's current hotbar slot is 8:
 		#{game::status} is "playing"
 		if event-item is a tnt block named "&c&lProximity Mine":
@@ -814,7 +790,7 @@ on pickup of diamond:
 	set metadata "capture-powerup" of last dropped item to true
 
 on inventory click:
-	world of player is world "Capture"
+	world of player is world {@world}
 	if {game::status} is "playing":
 		if index of clicked slot is 8:
 			cancel event
@@ -827,7 +803,7 @@ on inventory click:
 	cancel event
 
 on damage of player:
-	world of victim is world "Capture"
+	world of victim is world {@world}
 	if {game::status} is not "playing":
 		cancel event
 		if damage cause was void:
@@ -851,7 +827,7 @@ function getConnectedBlocks(itemtype: itemtype, location: location, blocks: bloc
 	return {_blocks::*}
 
 on weather change to raining or thunder:
-	event-world is world "Capture"
+	event-world is world {@world}
 	cancel event
 
 command /capture [<text>] [<text>] [<text>]:
@@ -973,7 +949,6 @@ command /capture [<text>] [<text>] [<text>]:
 			if indices of {capture::arenas::*} doesn't contain argument 2:
 				message "{@prefix}&cThere was no arena with the name &l%argument 2%"
 				stop
-			set {capture::arenas::%argument 2%::flags::*} to diamond block
 			delete {capture::arenas::%argument 2%::*}
 			message "{@prefix}Deleted arena %argument 2%"
 		else if argument 1 is "setup":
@@ -1055,7 +1030,7 @@ command /capture [<text>] [<text>] [<text>]:
 				set {_arena} to {capture::temp::%player%::setup}
 				message "{@prefix}&fSetup details for arena &l%{_arena}%&f:"
 				loop indices of {capture::temp::%player%::setup::*}:
-					loop-value is not "captures", "flags", "powerups", "tutorial", "inventoryresets" or "pointspawns"
+					loop-value is not "captures", "powerups", "tutorial", "inventoryresets" or "pointspawns"
 					set {capture::arenas::%{_arena}%::%loop-value%} to {capture::temp::%player%::setup::%loop-value%}
 					message "{@prefix}&7Property &f%loop-value% &7is &f&l%{capture::arenas::%{_arena}%::%loop-value%}%"
 				loop indices of {capture::temp::%player%::setup::captures::*}:
@@ -1066,10 +1041,6 @@ command /capture [<text>] [<text>] [<text>]:
 				set {capture::arenas::%{_arena}%::pointspawns::*} to {capture::temp::%player%::setup::pointspawns::*}
 				set {capture::arenas::%{_arena}%::powerups::*} to {capture::temp::%player%::setup::powerups::*}
 				set {capture::arenas::%{_arena}%::name} to {_arena}
-				message "{@prefix}&6Saving..."
-				loop blocks within {capture::arenas::%{_arena}%::pos1} to {capture::arenas::%{_arena}%::pos2}:
-					if loop-block is a diamond block:
-						add location of loop-block to {capture::arenas::%{_arena}%::flags::*}
 				message "{@prefix}&aSetup complete!"
 				delete {capture::temp::%player%::setup::*} and {capture::temp::%player%::setup}
 			else:
