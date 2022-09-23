@@ -78,6 +78,7 @@ function openCaptureVotingMenu(player: player):
 		set {_index} to 0
 		loop indices of {capture::arenas::*}:
 			set slot {_index} of {_inventory} to paper named "&a&l%{capture::arenas::%loop-value%::name}%" with lore "&fVotes: &l%{capture::temp::voting::map::%loop-value%}%", "" and "&7Click to vote for %{capture::arenas::%loop-value%::name}%"
+			add 1 to {_index}
 		wait 5 ticks
 
 on right click with nether star:
@@ -1009,7 +1010,7 @@ command /capture [<text>] [<text>] [<text>]:
 				stop
 			set {capture::temp::%player%::setup::condspawn::%argument 2%::%argument 3%} to location above player
 			message "{@prefix}You have set a conditional spawn for team %argument 2% where the point owned has to be %argument 3%." and "{@prefix}You can continue adding conditional spawns when done type:"
-			message "{@prefix}Type command &l/cap setup tutorial capture/points/inventory/powerups &fto set the flying location of the spectators near the POI." and " "
+			message "{@prefix}Type command &l/cap setup tutorial start/capture/points/inventory/powerups &fto set the flying location of the spectators near the POI." and " "
 		else if argument 1 is "setup":
 			if argument 2 is "quit":
 				delete {capture::temp::%player%::setup}
