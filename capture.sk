@@ -984,6 +984,8 @@ command /capture [<text>] [<text>] [<text>]:
 					add 1 to {_index}
 					if {_index} is {_find}:
 						delete {capture::arenas::%loop-value%::*}
+						# Because Skript is scuffed
+						delete {capture::arenas::%loop-value%::spectatorspawn}
 						message "{@prefix}Deleted arena %loop-value%"
 						stop
 				message "{@prefix}&cThe indices are between 1 and %size of indices of {capture::arenas::*}% not %{_index}%"
