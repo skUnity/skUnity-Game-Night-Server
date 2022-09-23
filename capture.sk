@@ -61,6 +61,7 @@ on join:
 		clear inventory of player
 
 on unload:
+	reveal all players to all players
 	loop all entities in world {@world}:
 		metadata "capture-inventory-reset" of loop-entity is true
 		delete loop-entity
@@ -115,6 +116,8 @@ function captureResetPlayer(player: player, teleport: boolean = false):
 	equip {_player} with leather chestplate
 	equip {_player} with leather leggings
 	equip {_player} with leather boots
+	make {_player} stop flying
+	reveal {_player} to all players
 	if {capture::temp::{@team1}::*} contains {_player}:
 		dye {_player}'s helmet {@team1}
 		dye {_player}'s chestplate {@team1}
@@ -122,7 +125,10 @@ function captureResetPlayer(player: player, teleport: boolean = false):
 		dye {_player}'s boots {@team1}
 		set tablist name of {_player} to "<{@team1}>%{_player}%"
 		{_teleport} is true
-		teleport {_player} to {capture::arenas::%{capture::temp::arena}%::{@team1}spawn}
+		if {capture::temp::player::%{_player}%::selectedSpawn} is set:
+			teleport {_player} to {capture::temp::player::%{_player}%::selectedSpawn}
+		else:
+			teleport {_player} to {capture::arenas::%{capture::temp::arena}%::{@team1}spawn}
 	else:
 		dye {_player}'s helmet {@team2}
 		dye {_player}'s chestplate {@team2}
@@ -130,7 +136,10 @@ function captureResetPlayer(player: player, teleport: boolean = false):
 		dye {_player}'s boots {@team2}
 		set tablist name of {_player} to "<{@team2}>%{_player}%"
 		{_teleport} is true
-		teleport {_player} to {capture::arenas::%{capture::temp::arena}%::{@team2}spawn}
+		if {capture::temp::player::%{_player}%::selectedSpawn} is set:
+			teleport {_player} to {capture::temp::player::%{_player}%::selectedSpawn}
+		else:
+			teleport {_player} to {capture::arenas::%{capture::temp::arena}%::{@team2}spawn}
 	add an iron sword to {_player}
 	add a bow to {_player}
 	add 15 of arrows to {_player}
@@ -159,12 +168,18 @@ on death of player:
 	else:
 		message "&7%death message%" to {capture::temp::players::*}
 		set death message to ""
-	set {_location} to location of victim
 	clear drops
 	force victim to respawn
 	wait a tick
-	set gamemode of victim to spectator
-	teleport victim to {_location}
+	make victim start flying
+	teleport victim to {capture::arena::%{capture::temp::arena}%::spectatorspawn}
+	#set gamemode of victim to spectator
+	apply invisibility to victim for 10 seconds
+	hide victim from {capture::temp::players::*}
+	set {_team} to captureGetTeam(victim)
+	loop indices of {capture::arenas::%{capture::temp::arena}%::condspawn::%{_team}%::*}:
+		{capture::temp::captures::%{_team}%::*} contains loop-value
+		add paper named "&6Set spawn to point %loop-value%" with lore "&7%loop-value%" to victim
 	send title " " with subtitle "&4&lYou died" to victim for 2 seconds with fadein 0 ticks and fadeout 2 seconds
 	wait 2 seconds
 	if attacker is a player:
@@ -174,6 +189,22 @@ on death of player:
 		wait a second
 	captureResetPlayer(victim, true)
 	send title " " with subtitle "&aRespawning now" to victim for 2 seconds with fadein 0 ticks and fadeout a second
+
+on right click with paper:
+	event-world is world {@world}
+	{game::status} is "playing"
+	set {_capture} to line 1 of lore of event-item
+	set {_team} to captureGetTeam(player)
+	loop indices of {capture::arenas::%{capture::temp::arena}%::condspawn::%{_team}%::*}:
+		{_capture} contains loop-value
+		if {capture::temp::captures::%{_team}%::*} doesn't contain loop-value:
+			message "&c&lYour team doesn't own this capture point anymore!"
+			remove event-item from player
+			play sound "ENTITY_VILLAGER_NO" at pitch 0 to player
+		else:
+			set {capture::temp::player::%player%::selectedSpawn} to {capture::arenas::%{capture::temp::arena}%::condspawn::%{_team}%::%loop-value%}
+			play sound "BLOCK_LEVER_CLICK" at pitch 0 to player
+			message "&d&lYou have set your next spawning location to %loop-value%"
 
 on place:
 	event-world is world {@world}
@@ -265,6 +296,8 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 	if {_tutorial} is false:
 		set {_tutorialTime} to 0
 	set gamemode of {capture::temp::players::*} to spectator
+	clear dropped items in world {@world}
+	teleport {capture::temp::players::*} to {capture::arena::%{capture::temp::arena}%::spectatorspawn}
 	loop "start", "capture", "points", "inventory" and "powerups":
 		teleport {capture::temp::players::*} to {capture::arenas::%{capture::temp::arena}%::tutorial::%loop-value-1%}
 		play sound "BLOCK_NOTE_BLOCK_PLING" at pitch 2 to {capture::temp::players::*}
@@ -516,6 +549,7 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 function captureEndGame(arena: string, colour: colour = white):
 	message " ", "&a&lThanks for playing Capture The Point by Lime!" and " " to {capture::temp::players::*}
 	set {game::status} to "ending"
+	# Spam add a bunch of random locations for fireworks
 	loop {capture::temp::players::*}:
 		gamemode of loop-value is not spectator
 		add location 3 above loop-value to {_locations::*}
@@ -817,7 +851,7 @@ on damage of player:
 	cancel event
 
 function getConnectedBlocks(itemtype: itemtype, location: location, blocks: blocks) :: blocks:
-	loop blocks in radius 1.8 around {_location}:
+	loop blocks in radius 2.1 around {_location}:
 		loop-block is {_itemtype}
 		if {_blocks::*} is not empty:
 			if {_blocks::*} contains loop-block:
@@ -882,9 +916,17 @@ command /capture [<text>] [<text>] [<text>]:
 					stop
 				captureResetPlayer({_player}, true)
 				play sound "ENTITY_VILLAGER_NO" at pitch 2 to {_player}
+			else if argument 2 is "speed":
+				if argument 3 is not set:
+					reset flying speed of player
+					message "{@prefix}reset flying speed"
+				else:
+					set flying speed of player to argument 3 parsed as number
+					message "{@prefix}set flying speed to %argument 3%"
 			else:
 				message "&c/cap a notutstart/dev/startskiptutorial &7- fast start"
-				message "&c/cap a switchteams/s [player] &7- force team switch" and " "
+				message "&c/cap a switchteams/s [player] &7- force team switch"
+				message "&c/cap a speed [number] &7- Set your flying speed, or no arg for reset" and " "
 		else if argument 1 is "s" or "start":
 			if {game::status} is "ending":
 				message "{@prefix}&cPrevious game is ending, please wait..."
@@ -951,6 +993,23 @@ command /capture [<text>] [<text>] [<text>]:
 				stop
 			delete {capture::arenas::%argument 2%::*}
 			message "{@prefix}Deleted arena %argument 2%"
+		else if argument 1 is "condspawn", "conditionalspawn" or "cspawn":
+			if argument 2 is not set:
+				message "{@prefix}&cYou need to specify a team for the conditional spawn zone. /cap setup condspawn <{@team1}/{@team2}> <capturePointName>"
+				stop
+			if argument 2 is not "{@team1}" or "{@team2}":
+				message "{@prefix}&c%argument 2% is not a team. /cap setup condspawn <{@team1}/{@team2}> <capturePointName>"
+				stop
+			set {_captures::*} to indices of {capture::temp::%player%::setup::captures::*}
+			if argument 3 is not set:
+				message "{@prefix}&cYou need to specify a capture point name. /cap setup condspawn <{@team1}/{@team2}> <capturePointName>" and "names are: %{_captures::*}%"
+				stop
+			if {_captures::*} doesn't contain argument 3:
+				message "{@prefix}&c%argument 3% is not a capture point name. /cap setup condspawn <{@team1}/{@team2}> <capturePointName>" and "names are: %{_captures::*}%"
+				stop
+			set {capture::temp::%player%::setup::condspawn::%argument 2%::%argument 3%} to location above player
+			message "{@prefix}You have set a conditional spawn for team %argument 2% where the point owned has to be %argument 3%." and "{@prefix}You can continue adding conditional spawns when done type:"
+			message "{@prefix}Type command &l/cap setup tutorial capture/points/inventory/powerups &fto set the flying location of the spectators near the POI." and " "
 		else if argument 1 is "setup":
 			if argument 2 is "quit":
 				delete {capture::temp::%player%::setup}
@@ -964,7 +1023,7 @@ command /capture [<text>] [<text>] [<text>]:
 					message "{@prefix}Type command &l/cap setup name <name> &fto set the name."
 					stop
 				if indices of {capture::arenas::*} is set:
-					if indices of {capture::arenas::*} doesn't contain argument 3:
+					if indices of {capture::arenas::*} contains argument 3:
 						message "{@prefix}&cThere is already an arena with the name &l%argument 3%"
 						stop
 				set {capture::temp::%player%::setup} to argument 3
@@ -1011,6 +1070,9 @@ command /capture [<text>] [<text>] [<text>]:
 				message "{@prefix}Type command &l/cap setup add/addcapture <name> &fto add a capture point."
 				message "{@prefix}You must be looking at a circle made out of white stained hardened clay." and " "
 			else if argument 2 is "add" or "addcapture" or "capturepoint":
+				if argument 3 is not set:
+					message "{@prefix}&cYou need to specify a name for the capture zone. /cap setup add <name>"
+					stop
 				set {_point} to argument 3
 				set {capture::temp::%player%::setup::captures::%{_point}%::*} to getConnectedBlocks(white stained hardened clay, target block, target block)
 				if {capture::temp::%player%::setup::captures::%{_point}%::*} is not set:
@@ -1018,6 +1080,8 @@ command /capture [<text>] [<text>] [<text>]:
 					message "{@prefix}You must be looking at a circle made out of white stained hardened clay." and " "
 					stop
 				message "{@prefix}You add a capture point named %{_point}%"
+				message "{@prefix}Type command &l/cap condspawn <{@team1}/{@team2}> <capturePointName> &fto allow conditional spawn locations if a team owns the defined point."
+				message "{@prefix}If you don't want a conditional spawn type: "
 				message "{@prefix}Type command &l/cap setup tutorial capture/points/inventory/powerups &fto set the flying location of the spectators near the POI." and " "
 			else if argument 2 is "tutorial" or "tut":
 				if argument 3 is not "capture", "points", "inventory" or "powerups":
@@ -1030,7 +1094,7 @@ command /capture [<text>] [<text>] [<text>]:
 				set {_arena} to {capture::temp::%player%::setup}
 				message "{@prefix}&fSetup details for arena &l%{_arena}%&f:"
 				loop indices of {capture::temp::%player%::setup::*}:
-					loop-value is not "captures", "powerups", "tutorial", "inventoryresets" or "pointspawns"
+					loop-value is not "captures", "condspawn", "powerups", "tutorial", "inventoryresets" or "pointspawns"
 					set {capture::arenas::%{_arena}%::%loop-value%} to {capture::temp::%player%::setup::%loop-value%}
 					message "{@prefix}&7Property &f%loop-value% &7is &f&l%{capture::arenas::%{_arena}%::%loop-value%}%"
 				loop indices of {capture::temp::%player%::setup::captures::*}:
@@ -1038,6 +1102,12 @@ command /capture [<text>] [<text>] [<text>]:
 				set {capture::arenas::%{_arena}%::inventoryresets::*} to {capture::temp::%player%::setup::inventoryresets::*}
 				loop {capture::temp::%player%::setup::tutorial::*}:
 					set {capture::arenas::%{_arena}%::tutorial::%loop-index%} to {capture::temp::%player%::setup::tutorial::%loop-index%}
+				if indices of {capture::temp::%player%::setup::condspawn::{@team1}::*} is set:
+					loop {capture::temp::%player%::setup::condspawn::{@team1}::*}:
+						set {capture::arenas::%{_arena}%::condspawn::{@team1}::%loop-index%} to loop-value
+				if indices of {capture::temp::%player%::setup::condspawn::{@team2}::*} is set:
+					loop {capture::temp::%player%::setup::condspawn::{@team2}::*}:
+						set {capture::arenas::%{_arena}%::condspawn::{@team2}::%loop-index%} to loop-value
 				set {capture::arenas::%{_arena}%::pointspawns::*} to {capture::temp::%player%::setup::pointspawns::*}
 				set {capture::arenas::%{_arena}%::powerups::*} to {capture::temp::%player%::setup::powerups::*}
 				set {capture::arenas::%{_arena}%::name} to {_arena}
