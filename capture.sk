@@ -1,0 +1,1080 @@
+
+# Capture The Point by LimeGlass
+# Version 0.0.0 (Snapshot given to BaeFell)
+
+options:
+	# The amount of stages a flag can have from white wool to team colour
+	flag-stages: 4
+	prefix: &8[&a&lCTP&8] &f
+	team1: orange
+	team2: purple
+
+on load:
+	GameManager_Register_Game("capture", "Capture The Point", script)
+	if {capture::lobby} is not set:
+		set {capture::lobby} to spawn of world "Capture"
+	if GameManager_Get_Game_Key() is "capture":
+		{game::status} is not "ending"
+		set {game::status} to "waiting"
+	if {game::status} is not set:
+		set {game::status} to "waiting"
+
+on player world change:
+	# Reset the player when they get teleported to another world. Aka spectator or whatever.
+	if event-world was world "Capture":
+		set gamemode of player to survival
+		clear player's inventory
+		heal player
+		feed player
+		stop
+	the event-world will be world "Capture"
+	GameManager_Get_Game_Key() is "capture"
+	if {game::status} is "playing":
+		set gamemode of player to spectator
+		teleport player to {capture::arena::%{capture::temp::arena}%::spectatorspawn}
+		message "{@prefix}&cThe game is currently being played, you've been put into spectator mode."
+		stop
+
+on join:
+	if GameManager_Get_Game_Key() is "capture":
+		teleport player to {capture::lobby}
+		clear inventory of player
+
+on unload:
+	loop all entities in world "Capture":
+		metadata "capture-inventory-reset" of loop-entity is true
+		delete loop-entity
+	if {capture::temp::arena} is not set:
+		delete {capture::temp::*}
+	else:
+		captureEndGame({capture::temp::arena})
+
+function openCaptureVotingMenu(player: player):
+	set {_inventory} to a chest inventory with 1 row named "             &8&l&nMap Vote"
+	set metadata "capture-inventory" of {_player} to {_inventory}
+	open {_inventory} to {_player}
+	while current inventory of {_player} is {_inventory}:
+		set {_index} to 0
+		loop indices of {capture::arenas::*}:
+			set slot {_index} of {_inventory} to paper named "&a&l%{capture::arenas::%loop-value%::name}%" with lore "&fVotes: &l%{capture::temp::voting::map::%loop-value%}%", "" and "&7Click to vote for %{capture::arenas::%loop-value%::name}%"
+		wait 5 ticks
+
+on right click with nether star:
+	world of player is world "Capture"
+	{game::status} is "starting"
+	openCaptureVotingMenu(player)
+
+on inventory close:
+	clear metadata "capture-inventory" of player
+
+on inventory click:
+	clicked inventory is metadata "capture-inventory" of player
+	cancel event
+	set {_clicked} to index of clicked slot
+	set {_index} to 0
+	set {_existing} to {capture::temp::voting::selection::%player%}
+	loop indices of {capture::arenas::*}:
+		if {_index} is {_clicked}:
+			set {capture::temp::voting::selection::%player%} to loop-value
+			if {_existing} is set:
+				subtract 1 from {capture::temp::voting::map::%{_existing}%}
+			add 1 to {capture::temp::voting::map::%loop-value%}
+			# New vote
+			{_existing} is not loop-value
+			message "{@prefix}&aYou have voted for map &l%{capture::arenas::%loop-value%::name}%"
+			play sound "ENTITY_EXPERIENCE_ORB_PICKUP" to player
+			exit loop
+		add 1 to {_index}
+
+function captureResetPlayer(player: player, teleport: boolean = false):
+	set {_powerup} to slot 8 of {_player}
+	clear inventory of {_player}
+	set slot 8 of {_player} to {_powerup}
+	set gamemode of {_player} to survival
+	equip {_player} with leather helmet
+	equip {_player} with leather chestplate
+	equip {_player} with leather leggings
+	equip {_player} with leather boots
+	if {capture::temp::{@team1}::*} contains {_player}:
+		dye {_player}'s helmet {@team1}
+		dye {_player}'s chestplate {@team1}
+		dye {_player}'s leggings {@team1}
+		dye {_player}'s boots {@team1}
+		set tablist name of {_player} to "<{@team1}>%{_player}%"
+		{_teleport} is true
+		teleport {_player} to {capture::arenas::%{capture::temp::arena}%::{@team1}spawn}
+	else:
+		dye {_player}'s helmet {@team2}
+		dye {_player}'s chestplate {@team2}
+		dye {_player}'s leggings {@team2}
+		dye {_player}'s boots {@team2}
+		set tablist name of {_player} to "<{@team2}>%{_player}%"
+		{_teleport} is true
+		teleport {_player} to {capture::arenas::%{capture::temp::arena}%::{@team2}spawn}
+	add an iron sword to {_player}
+	add a bow to {_player}
+	add 15 of arrows to {_player}
+	add 3 beetroot soup named "&c&lRegen Heal" to {_player}
+	{_teleport} is true
+	apply regeneration 4 to {_player} for 10 seconds
+	apply resistance 5 to {_player} for 10 seconds
+
+on quit:
+	{capture::temp::players::*} contains player
+	remove player from {capture::temp::players::*}
+	message "{@prefix}&7%player% has left the game."
+	reset tablist name of player
+
+on death of player:
+	event-world is world "Capture"
+	if attacker is a player:
+		if {capture::temp::{@team1}::*} contains attacker:
+			add 50 to {capture::temp::points::{@team1}}
+			message "&f+50 <{@team2}>%victim% &fdied to <{@team1}>%attacker%" to {capture::temp::players::*}
+			set death message to ""
+		else if {capture::temp::{@team2}::*} contains attacker:
+			add 50 to {capture::temp::points::{@team2}}
+			message "&f+50 <{@team1}>%victim% &fdied to <{@team2}>%attacker%" to {capture::temp::players::*}
+			set death message to ""
+	else:
+		message "&7%death message%" to {capture::temp::players::*}
+		set death message to ""
+	set {_location} to location of victim
+	clear drops
+	force victim to respawn
+	wait a tick
+	set gamemode of victim to spectator
+	teleport victim to {_location}
+	send title " " with subtitle "&4&lYou died" to victim for 2 seconds with fadein 0 ticks and fadeout 2 seconds
+	wait 2 seconds
+	if attacker is a player:
+		set spectator target of victim to attacker
+	loop integers between 8 and 1:
+		send title "&c&lRespawning in %loop-number% seconds" with subtitle " " to victim for 2 seconds with fadein 0 ticks and fadeout a second
+		wait a second
+	captureResetPlayer(victim, true)
+	send title " " with subtitle "&aRespawning now" to victim for 2 seconds with fadein 0 ticks and fadeout a second
+
+on place:
+	event-world is world "Capture"
+	if GameManager_Is_Staff(player) is true:
+		{game::status} is not "playing"
+		stop
+	cancel event
+
+on break:
+	event-world is world "Capture"
+	if GameManager_Is_Staff(player) is true:
+		{game::status} is not "playing"
+		stop
+	cancel event
+
+on hunger meter change:
+	event-world is world "Capture"
+	set food level of player to 10
+
+on right click with beetroot soup:
+	event-world is world "Capture"
+	cancel event
+	play sound "ENTITY_GENERIC_EAT"
+	set slot player's current hotbar slot of player to air
+	apply regeneration 4 to player for 3 seconds
+	loop 30 times:
+		show beetroot soup item crack random vector location of player's eyes
+		chance of 5%:
+			wait a tick
+
+function captureGetTeam(player: player) :: string:
+	if {capture::temp::{@team1}::*} contains {_player}:
+		return "{@team1}"
+	else if {capture::temp::{@team2}::*} contains {_player}:
+		return "{@team2}"
+
+function captureStart(voting: boolean = false, tutorial: boolean = true):
+	{lobby::players::*} is set
+	{game::status} is "waiting"
+	GameManager_Set_Game_Status("starting")
+	if {_voting} is true:
+		set {_time} to 30 seconds
+		play sound "UI_BUTTON_CLICK" at pitch 0 to {lobby::players::*}
+		message "", "{@prefix}&fGame is starting! 30 seconds to vote for a map by clicking the nether star in your lobby inventory." and "" to {lobby::players::*}
+		loop {lobby::players::*}:
+			clear inventory of loop-value
+			set slot 4 of loop-value to nether star named "&6&lMap Vote" with lore "&7Click to vote on the map to play"
+		loop indices of {capture::arenas::*}:
+			set {capture::temp::voting::map::%loop-value%} to 0
+		while {_time} is greater than 0 seconds:
+			if {game::status} is not "starting":
+				stop
+			if {lobby::players::*} is not set:
+				stop
+			if {_time} is 1 second, 2 seconds, 3 seconds, 4 seconds, 5 seconds, 10 seconds or 15 seconds:
+				message "{@prefix}&7%{_time}% left in the voting!" to {lobby::players::*}
+				play sound "UI_BUTTON_CLICK" at pitch 2 to {lobby::players::*}
+			wait a second
+			subtract a second from {_time}
+		loop indices of {capture::arenas::*}:
+			if {_votes} is not set:
+				set {capture::temp::arena} to loop-value
+				set {_votes} to {capture::temp::voting::map::%loop-value%}
+			else if {capture::temp::voting::map::%loop-value%} is greater than {_votes}:
+				set {capture::temp::arena} to loop-value
+				set {_votes} to {capture::temp::voting::map::%loop-value%}
+		delete {capture::temp::voting::*}
+		close inventory to {lobby::players::*}
+		message "{@prefix}&6&lMap &f&l%{capture::arenas::%{capture::temp::arena}%::name}% &6&lhas won the voting with &f&l%{_votes}% &6&lvotes!" to {lobby::players::*}
+		play sound "BLOCK_NOTE_BLOCK_PLING" at pitch 1 to {lobby::players::*}
+		clear inventory of {lobby::players::*}
+	if {capture::temp::arena} is not set:
+		set {capture::temp::arena} to a random element out of all indices of {capture::arenas::*}
+		message "{@prefix}&6&lMap &f&l%{capture::arenas::%{capture::temp::arena}%::name}% &6&lhas been selected!" to {lobby::players::*}
+	set {_time} to 5 seconds
+	if {_tutorial} is false:
+		set {_time} to 0 seconds
+	while {_time} is greater than 0 seconds:
+		if {game::status} is not "starting":
+			stop
+		play sound "BLOCK_NOTE_BLOCK_HAT" to {lobby::players::*}
+		message "{@prefix}&b&lGame is starting in %{_time}%!" to {lobby::players::*}
+		wait a second
+		subtract a second from {_time}
+	set {capture::arenas::%{capture::temp::arena}%::flags::*} to white wool
+	loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
+		add {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*} to {_captures::*}
+	set {capture::temp::players::*} to {lobby::players::*}
+	set {_tutorialTime} to 6 * 20
+	if {_tutorial} is false:
+		set {_tutorialTime} to 0
+	set gamemode of {capture::temp::players::*} to spectator
+	loop "start", "capture", "points", "inventory" and "powerups":
+		teleport {capture::temp::players::*} to {capture::arenas::%{capture::temp::arena}%::tutorial::%loop-value-1%}
+		play sound "BLOCK_NOTE_BLOCK_PLING" at pitch 2 to {capture::temp::players::*}
+		loop 100 times:
+			message " " to {capture::temp::players::*}
+		make {capture::temp::players::*} start flying
+		if loop-value is "capture":
+			message "&fThis is a capture point. You capture it for your team by standing in the area", "&fThe more teammates that are on the point, the faster it'll capture." and "" to {capture::temp::players::*}
+		else if loop-value is "points":
+			message "&aThis is a point spawner. Collecting it will gain 300 points for your team." and "" to {capture::temp::players::*}
+			loop {capture::arenas::%{capture::temp::arena}%::pointspawns::*}:
+				drop emerald named "&a&lEarn Points" 0.5 above loop-value-2 without velocity
+				set metadata "capture-earn-points" of last dropped item to true
+				launch ball coloured lime at location 0.1 below loop-value-2 with duration 0
+				set block at loop-value-2 to emerald block
+		else if loop-value is "inventory":
+			message "&6This is an inventory restore point. Collecting it will restore your inventory." and "" to {capture::temp::players::*}
+			loop {capture::arenas::%{capture::temp::arena}%::inventoryresets::*}:
+				drop chest named "&6&lInventory Reset" 0.5 above loop-value-2 without velocity
+				set metadata "capture-inventory-reset" of last dropped item to true
+				launch ball coloured yellow at location 0.1 below loop-value-2 with duration 0
+				set block at loop-value-2 to gold block
+		else if loop-value is "powerups":
+			message "&bThis is a powerup spawner. Collecting it will give you a powerup to use." and "" to {capture::temp::players::*}
+			loop {capture::arenas::%{capture::temp::arena}%::powerups::*}:
+				drop diamond named "&b&lPowerup" 0.5 above loop-value-2 without velocity
+				set metadata "capture-powerup" of last dropped item to true
+				launch ball coloured light blue at location 0.1 below loop-value-2 with duration 0
+				set block at loop-value-2 to beacon
+		else:
+			message "", "&3&lWelcome To Capture The Point", "&7Goal of the game is to capture all 5 points", "&7with your team. You earn points every 2 seconds.", "&7The more captures you have, the points are given.", "The team that reachs 15,000 points first wins!", "&aGood luck and have fun!" and "" to {capture::temp::players::*}
+			{_tutorial} is true
+			wait 3 seconds
+		loop {_tutorialTime} times:
+			if {game::status} is not "starting":
+				stop
+			if loop-value-1 is not "start":
+				teleport {capture::temp::players::*} to {capture::arenas::%{capture::temp::arena}%::tutorial::%loop-value-1%}
+			wait a tick
+			# Start working on resetting arena during tutorial
+			set {_block} to a random element out of {_captures::*}
+			if block at {_block} is not white stained hardened clay:
+				set block at {_block} to white stained hardened clay
+			remove {_block} from {_captures::*}
+	loop {_captures::*}:
+		if loop-value is not white stained hardened clay:
+			set loop-value to white stained hardened clay
+	clear {_captures::*}
+	loop 100 times:
+		message " " to {capture::temp::players::*}
+	GameManager_Set_Game_Status("playing")
+	set gamemode of {capture::temp::players::*} to survival
+	setup skoreboard for {capture::temp::players::*}
+	make {capture::temp::players::*} stop flying
+	set {_players::*} to {lobby::players::*}
+	set {_toggle} to random element out of true and false
+	loop size of {_players::*} times:
+		set {_player} to random element out of {_players::*}
+		if {_toggle} is true:
+			add {_player} to {capture::temp::{@team1}::*}
+			message "{@prefix}<{@team1}>&lYou've been added to team {@team1}!" to {_player}
+		else:
+			add {_player} to {capture::temp::{@team2}::*}
+			message "{@prefix}<{@team2}>&lYou've been added to team {@team2}!" to {_player}
+		captureResetPlayer({_player}, true)
+		remove {_player} from {_players::*}
+		set {_toggle} to not {_toggle}
+	captureFlagUpdate({capture::temp::arena})
+	# Powerups load
+	clear {capture::temp::powerups::*} and {capture::temp::powerup::*}
+	add tnt block named "&c&lProximity Mine" with lore "&7Drop the tnt block to set" and "&7the proximity mine active" to {capture::temp::powerups::*}
+	add stone axe named "&2&lJump Slam" with lore "&7Right clicking on will launch", "&7you into the air you're facing, and" and "&7grand slam down creating an explosion on landing." to {capture::temp::powerups::*}
+	add string named "&f&lSmoke Bomb" with lore "&7Drop at a location to create a smoke bomb" to {capture::temp::powerups::*}
+	
+	play sound "ENTITY_PLAYER_LEVELUP" at pitch 2 to {capture::temp::players::*}
+	message "&f&lGood luck and have fun!" and "" to {capture::temp::players::*}
+	set title of skoreboard {capture::temp::players::*} to "&6&lCapture The Point"
+	set slot 13, 11, and 6 of skoreboard {capture::temp::players::*} to " "
+	set slot 12 of skoreboard {capture::temp::players::*} to "&7First to 15,000"
+	set slot 10 of skoreboard {capture::temp::players::*} to "&6Team {@team1}"
+	set slot 8 of skoreboard {capture::temp::players::*} to "&5Team {@team2}"
+	loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
+		loop {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*}:
+			add location of loop-value-2 to {_captures::%loop-value-1%::*}
+		set {_captureState::%loop-value%} to 0
+	while {game::status} is "playing":
+		if {capture::temp::players::*} is not set:
+			captureEndGame({capture::temp::arena})
+			stop
+		set slot 9 of skoreboard {capture::temp::players::*} to "&f&l%{capture::temp::points::{@team1}} otherwise 0%"
+		set slot 7 of skoreboard {capture::temp::players::*} to "&f&l%{capture::temp::points::{@team2}} otherwise 0%"
+		set {_index} to 5
+		set {_toggle} to true
+		loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
+			clear {_bold}, {_pullback}, {_update}, {_status}, {_yes}, {_add}, {_pull} and {_playersCapturing::*}
+			set {_colour} to white
+			if {capture::temp::captures::{@team1}::*} is set:
+				{capture::temp::captures::{@team1}::*} contains loop-value
+				set {_colour} to {@team1}
+			if {capture::temp::captures::{@team2}::*} is set:
+				{capture::temp::captures::{@team2}::*} contains loop-value
+				set {_colour} to {@team2}
+			# player standing on point
+			loop {capture::temp::players::*}:
+				clear {_yes}
+				if {_captures::%loop-value-1%::*} contains location of block below loop-value-2:
+					set {_yes} to true
+				else if {_captures::%loop-value-1%::*} contains location of block 2 below loop-value-2:
+					set {_yes} to true
+				{_yes} is true
+				set {_bold} to true
+				add loop-value-2 to {_playersCapturing::*}
+				if {capture::temp::{@team1}::*} contains loop-value-2:
+					subtract 1 from {_pull}
+				else if {capture::temp::{@team2}::*} contains loop-value-2:
+					add 1 to {_pull}
+				abs({_captureState::%loop-value-1%}) is less than or equal to 10
+				set {_status} to " %abs({_captureState::%loop-value-1%})%/10"
+			# Not full captured, fading
+			if {_status} is not set:
+				abs({_captureState::%loop-value%}) is not 0 or 10
+				set {_status} to " %abs({_captureState::%loop-value%})%/10"
+			# Contested
+			if {_pull} is 0:
+				set {_colour} to light blue
+			set {_add} to "<bold>" if {_bold} is set, otherwise ""
+			loop {capture::temp::players::*}:
+				if {_playersCapturing::*} is set:
+					if {_playersCapturing::*} contains loop-value-2:
+						set {_add} to "%{_add}%<underline>"
+				set line {_index} of skoreboard loop-value-2 to "<%{_colour}%>%{_add}%%loop-value-1%%{_status} otherwise ""%"
+			subtract 1 from {_index}
+			# Do update this loop
+			if {_toggle}:
+				# Not full captured, fading (Attempts to bring back to it's last known state)
+				if {_pull} is not set:
+					abs({_captureState::%loop-value%}) is between 1 and 9
+					if {_captureState::%loop-value%} is less than 0:
+						# A team still owns the capture if someone didn't reset it to 0
+						if {capture::temp::captures::{@team1}::*} contains loop-value:
+							subtract 1 from {_captureState::%loop-value%}
+							set {_pullback} to true
+						else:
+							add 1 to {_captureState::%loop-value%}
+					else:
+						if {capture::temp::captures::{@team2}::*} contains loop-value:
+							add 1 to {_captureState::%loop-value%}
+							set {_pullback} to true
+						else:
+							subtract 1 from {_captureState::%loop-value%}
+					set {_update} to true
+				else:
+					{_pull} is not 0
+					if abs({_captureState::%loop-value%}) is less than 10:
+						if {_captureState::%loop-value%} is 0:
+							remove loop-value from {capture::temp::captures::{@team1}::*} and {capture::temp::captures::{@team2}::*}
+						add {_pull} to {_captureState::%loop-value%}
+						set {_update} to true
+					else if {_captureState::%loop-value%} is less than or equal to -10:
+						if {capture::temp::captures::{@team1}::*} contains loop-value:
+							# Confirm that it's being captured by another team other than owner
+							{_pull} is greater than 0
+							add {_pull} to {_captureState::%loop-value%}
+							set {_update} to true
+							abs({_captureState::%loop-value%}) is 10
+							set blocks at {_captures::%loop-value%::*} to {@team1} stained hardened clay
+						else:
+							add loop-value to {capture::temp::captures::{@team1}::*}
+							set {_loc} to location of first element out of {_captures::%loop-value%::*}
+							play sound "ITEM_TOTEM_USE" at volume 0.4 at pitch 0 at {_loc}
+							set blocks at {_captures::%loop-value%::*} to {@team1} stained hardened clay
+							remove loop-value from {capture::temp::captures::{@team2}::*}
+							launch ball large coloured {@team1} at {_loc} with duration 0
+							send title " " with subtitle "<{@team1}>&l{@team1} just captured %loop-value%!" to {capture::temp::players::*} for 2 seconds with fadein 5 ticks and fadeout 5 ticks
+					else if {_captureState::%loop-value%} is greater than or equal to 10:
+						if {capture::temp::captures::{@team2}::*} contains loop-value:
+							# Confirm that it's being captured by another team other than owner
+							{_pull} is less than 0
+							add {_pull} to {_captureState::%loop-value%}
+							set {_update} to true
+							abs({_captureState::%loop-value%}) is 10
+							set blocks at {_captures::%loop-value%::*} to {@team2} stained hardened clay
+						else:
+							add loop-value to {capture::temp::captures::{@team2}::*}
+							set {_loc} to location of first element out of {_captures::%loop-value%::*}
+							play sound "ITEM_TOTEM_USE" at volume 0.4 at pitch 0 at {_loc}
+							set blocks at {_captures::%loop-value%::*} to {@team2} stained hardened clay
+							remove loop-value from {capture::temp::captures::{@team1}::*}
+							launch ball large coloured {@team2} at {_loc} with duration 0
+							send title " " with subtitle "<{@team2}>&l{@team2} just captured %loop-value%!" to {capture::temp::players::*} for 2 seconds with fadein 5 ticks and fadeout 5 ticks
+				if {_update} is true:
+					abs({_captureState::%loop-value%}) is between 1 and 10
+					set {_percentage} to (9 - (10 - abs({_captureState::%loop-value%}))) * 0.1
+					clear {_change}, {_changed::*} and {_unchanged::*}
+					loop {_captures::%loop-value%::*}:
+						if block at loop-value-2 is not white stained hardened clay:
+							add block at loop-value-2 to {_changed::*}
+						else:
+							add block at loop-value-2 to {_unchanged::*}
+					set {_target} to rounded {_percentage} * size of {_captures::%loop-value%::*}
+					# Reduce some blocks
+					if size of {_changed::*} is greater than {_target}:
+						play sound "BLOCK_WOOD_PLACE" at first element out of {_captures::%loop-value%::*}
+						while size of {_changed::*} is greater than {_target}:
+							set {_change} to a random element out of {_changed::*}
+							set block at {_change} to white stained hardened clay
+							remove {_change} from {_changed::*}
+					# Add some blocks
+					else:
+						play sound "BLOCK_STONE_PLACE" at first element out of {_captures::%loop-value%::*}
+						while size of {_changed::*} is less than {_target}:
+							set {_change} to a random element out of {_unchanged::*}
+							if {_pullback}:
+								if {capture::temp::captures::{@team2}::*} contains loop-value:
+									set block at {_change} to {@team2} stained hardened clay
+									abs({_captureState::%loop-value%}) is 10
+									set blocks at {_unchanged::*} to {@team2} stained hardened clay
+								else:
+									set block at {_change} to {@team1} stained hardened clay
+									abs({_captureState::%loop-value%}) is 10
+									set blocks at {_unchanged::*} to {@team1} stained hardened clay
+							else:
+								if {_pull} is less than 0:
+									set block at {_change} to {@team1} stained hardened clay
+								else:
+									set block at {_change} to {@team2} stained hardened clay
+							remove {_change} from {_unchanged::*}
+							add {_change} to {_changed::*}
+		set {_toggle} to not {_toggle}
+		wait a second
+		if {capture::temp::captures::{@team1}::*} is set:
+			add 2 * size of {capture::temp::captures::{@team1}::*} to {capture::temp::points::{@team1}}
+		if {capture::temp::captures::{@team2}::*} is set:
+			add 2 * size of {capture::temp::captures::{@team2}::*} to {capture::temp::points::{@team2}}
+		add 1 to {_flagUpdate}
+		if {_flagUpdate} is greater than 45:
+			set {_flagUpdate} to 0
+			captureFlagUpdate({capture::temp::arena})
+
+function captureEndGame(arena: string):
+	message "&6&lThanks for playing Capture The Point!" to {capture::temp::players::*}
+	set {game::status} to "ending"
+	captureFlagUpdate({_arena})
+	# display health in tab to everyone for everyone
+	# TODO fireworks
+	if {capture::temp::players::*} is not empty:
+		wait 5 seconds
+	loop all entities in world "Capture":
+		if metadata "capture-inventory-reset" of loop-entity is true:
+			delete loop-entity
+		else if metadata "capture-earn-points" of loop-entity is true:
+			delete loop-entity
+		else if metadata "capture-powerup" of loop-entity is true:
+			delete loop-entity
+	loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
+		add {capture::arenas::%{capture::temp::arena}%::captures::%loop-value%::*} to {_captures::*}
+	loop {_captures::*}:
+		set loop-value to white stained hardened clay
+	set blocks at {capture::arenas::%{capture::temp::arena}%::pointspawns::*} to emerald block
+	set blocks at {capture::arenas::%{capture::temp::arena}%::inventoryresets::*} to gold block
+	set blocks at {capture::arenas::%{capture::temp::arena}%::powerups::*} to beacon
+	clear inventory of {capture::temp::players::*}
+	reset tablist name of {capture::temp::players::*}
+	reset skoreboard of {capture::temp::players::*}
+	teleport {capture::temp::players::*} to {capture::lobby}
+	set gamemode of {capture::temp::players::*} to survival
+	delete {capture::temp::*}
+	set {game::status} to "waiting"
+
+function captureFlagUpdate(arena: string):
+	if {game::status} is not "playing":
+		loop {capture::arenas::%{_arena}%::flags::*}:
+			set block at loop-value to white wool
+			chance of 20%:
+				wait a tick
+		stop
+	if {capture::temp::points::{@team1}} or {capture::temp::points::{@team2}} is not set:
+		loop {capture::arenas::%{_arena}%::flags::*}:
+			set block at loop-value to white wool
+			chance of 20%:
+				wait a tick
+		stop
+	if {capture::temp::points::{@team1}} is greater than {capture::temp::points::{@team2}}:
+		set {_wool} to {@team1} wool
+		set {_points} to {capture::temp::points::{@team1}}
+		set {_captures} to size of {capture::temp::captures::{@team1}::*}
+	else:
+		set {_wool} to {@team2} wool
+		set {_points} to {capture::temp::points::{@team2}}
+		set {_captures} to size of {capture::temp::captures::{@team2}::*}
+	# Game is complete
+	if {_points} is 15000:
+		loop {capture::arenas::%{_arena}%::flags::*}:
+			set block at loop-value to {_wool}
+			chance of 20%:
+				wait a tick
+		stop
+	# A team is dominating with all points captured.
+	if {_captures} is size of {capture::arenas::%{_arena}%::captures::*}:
+		loop {capture::arenas::%{_arena}%::flags::*}:
+			set block at loop-value to {_wool}
+			chance of 20%:
+				wait a tick
+		stop
+	set {_stage} to {@flag-stages}
+	set {_last} to 0
+	# Figure out amount of flag to cover in colour.
+	# Stage 1 is nearing the finish of the game.
+	loop integers between {@flag-stages} and 1:
+		if {_points} is between {_last} and {_points} / loop-number:
+			set {_stage} to loop-number
+		set {_last} to {_points} / loop-number
+	set {_size} to size of {capture::arenas::%{_arena}%::flags::*}
+	set {_amount} to {_size} / ({_stage} + 0.3)
+	loop {capture::arenas::%{_arena}%::flags::*}:
+		set block at loop-value to white wool
+		chance of 20%:
+			wait a tick
+	set {_blocks::*} to {capture::arenas::%{_arena}%::flags::*}
+	loop {_amount} times:
+		set {_block} to a random element out of {_blocks::*}
+		remove {_block} from {_blocks::*}
+		set block at {_block} to {_wool}
+		chance of 15%:
+			wait a tick
+
+function capturePowerup(player: player, rigged: number = 0):
+	if {_rigged} is 0:
+		loop integers between 1 and 2:
+			loop 9 times:
+				set {_decimal} to "%loop-number-1%.%loop-number-2%" parsed as number
+				add a tick to {_time}
+				play sound "ENTITY_EXPERIENCE_ORB_PICKUP" at pitch {_decimal} to {_player}
+				set {_last} to random element out of {capture::temp::powerups::*} where [itemtype input is not {_last}]
+				set slot 8 of {_player} to {_last} named "&b&lSELECTING POWERUP..."
+				wait {_time}
+	else:
+		set slot 8 of {_player} to {capture::temp::powerups::%{_rigged}%}
+	play sound "ENTITY_EXPERIENCE_ORB_PICKUP" at pitch 2 to {_player}
+	play sound "BLOCK_SMITHING_TABLE_USE" at pitch 2 to {_player}
+	set slot 8 of {_player} to a random element out of {capture::temp::powerups::*}
+	set {_type} to type of slot 8 of {_player}
+	if {_type} is tnt block:
+		set {_description} to "&aDrop the tnt block to set the proximity mine active"
+		play sound "ENTITY_GENERIC_EXTINGUISH_FIRE" at volume 0.5 at pitch 2 to {_player}
+		play sound "BLOCK_NOTE_BLOCK_HARP" at pitch 0 to {_player}
+		play sound "ENTITY_GENERIC_EXPLODE" at volume 0.5 at pitch 1 to {_player}
+		wait 9 ticks
+		play sound "ENTITY_GENERIC_EXPLODE" at volume 0.5 at pitch 2 to {_player}
+		play sound "BLOCK_NOTE_BLOCK_HARP" at pitch 2 to {_player}
+		wait 9 ticks
+		play sound "ENTITY_GENERIC_EXPLODE" at volume 0.5 at pitch 2 to {_player}
+		play sound "BLOCK_NOTE_BLOCK_HARP" at pitch 2 to {_player}
+	else if {_type} is a stone axe:
+		set {_description} to "&aRight clicking on will launch you into the air you're facing, and grand slam down creating an explosion on landing."
+	else if {_type} is a string:
+		set {_description} to "&aDrop to place a smoke bomb at a location."
+	set {_team} to captureGetTeam({_player})
+	loop {capture::temp::players::*}:
+		captureGetTeam(loop-value) is {_team}
+		send loop-value toast notification "&b%{_player}% has powerup %name of slot 8 of {_player}%" with icon {_type} and frame task
+	loop 6 times:
+		send action bar {_description} to {_player}
+		wait 2 seconds
+
+# For testing only
+on load:
+	clear {capture::temp::powerups::*} and {capture::temp::powerup::*}
+	add tnt block named "&c&lProximity Mine" with lore "&7Drop the tnt block to set" and "&7the proximity mine active" to {capture::temp::powerups::*}
+	add stone axe named "&2&lJump Slam" with lore "&7Right clicking on will launch", "&7you into the air you're facing, and" and "&7grand slam down creating an explosion on landing." to {capture::temp::powerups::*}
+	add string named "&f&lSmoke Bomb" with lore "&7Drop at a location to create a smoke bomb" to {capture::temp::powerups::*}
+
+on left click with stone axe:
+	metadata "capture-grand-slam" of player is true
+	delete metadata "capture-grand-slam" of player
+
+on right click:
+	event-world is world "Capture"
+	{game::status} is "playing"
+	cancel event
+	player's current hotbar slot is 8
+	set {_item} to slot 8 of player
+	if {_item} is a tnt block named "&c&lProximity Mine":
+		message "{@prefix}&aDrop the tnt block to set the proximity mine active. You can left click in the air to target your direction."
+	else if {_item} is a stone axe named "&2&lJump Slam":
+		push player upwards at speed 1.4
+		wait a tick
+		#play sound "ENTITY_WARDEN_ROAR" at pitch 1 at player
+		loop all players:
+			loop-player is not player
+			add loop-player to {_sound::*}
+		play sound "ENTITY_WARDEN_ROAR" at pitch 0 at player for {_sound::*}
+		push player forwards at speed 1
+		set metadata "capture-grand-slam" of player to true
+		set {_time} to 1.6 seconds
+		set {_decimal} to 0.5
+		while {_time} is greater than 0 seconds:
+			wait 3 ticks
+			subtract 3 ticks from {_time}
+			add 0.1 to {_decimal}
+			if player is on the ground:
+				exit loop
+			play sound "BLOCK_NOTE_BLOCK_HAT" at pitch {_decimal} at player
+			metadata "capture-grand-slam" of player is not set
+			exit loop
+		if metadata "capture-grand-slam" of player is true:
+			push player downwards at speed 3
+			push player forwards at speed 0.5
+		else:
+			push player direction from player to target block at speed 5
+		while player is not on the ground:
+			wait a tick
+			set the fallen distance of player to 0
+		play sound "ENTITY_GENERIC_EXPLODE" at pitch 0 at player
+		play sound "ENTITY_GENERIC_EXPLODE" at player
+		play sound "ENTITY_GENERIC_EXPLODE" at player
+		set slot 8 of player to air
+		loop 30 times:
+			show cloud random vector location of player
+		set {_team} to captureGetTeam(player)
+		loop all entities in radius 5 around player:
+			loop-entity is not player
+			captureGetTeam(loop-entity) is not {_team}
+			push loop-entity upwards at speed 0.8
+			damage loop-entity by 4
+			add loop-entity to {_continue::*}
+		wait a tick
+		loop {_continue::*}:
+			push loop-value direction from player to loop-value at speed 1
+	else if {_item} is string named "&f&lSmoke Bomb":
+		message "{@prefix}&aDrop to place a smoke bomb at a location."
+
+on drop:
+	event-world is world "Capture"
+	if player's current hotbar slot is 8:
+		#{game::status} is "playing"
+		if event-item is a tnt block named "&c&lProximity Mine":
+			set {_team} to captureGetTeam(player)
+			set metadata "capture-mine" of event-dropped item to {_team}
+			add velocity of event-dropped item to velocity of event-dropped item
+			while event-dropped item is not on the ground:
+				show electric spark at location of event-dropped item
+				wait a tick
+			show sonic boom at event-dropped item
+			wait 4 ticks
+			loop 40 times:
+				show warped spore random vector location of event-dropped item
+			wait 4 ticks
+			play sound "BLOCK_RESPAWN_ANCHOR_DEPLETE" at pitch 2 at event-dropped item
+			show soul at location above event-dropped item
+			while event-dropped item is alive:
+				wait 5 ticks
+				set {_players::*} to all players in radius 4 around event-dropped item
+				if {_players::*} is not set:
+					reset display name of event-dropped item
+					continue
+				loop {_players::*}:
+					if captureGetTeam(loop-value) is {_team}:
+						if {_team} is "{@team1}":
+							set display name of event-dropped item to "<{@team1}>%player%'s mine"
+						else:
+							set display name of event-dropped item to "<{@team2}>%player%'s mine"
+				{game::status} is not "playing"
+				delete event-dropped item
+				exit loop
+			stop
+		else if event-item is a string named "&f&lSmoke Bomb":
+			add velocity of event-dropped item to velocity of event-dropped item
+			while event-dropped item is not on the ground:
+				show ash at event-dropped item
+				wait a tick
+			set {_location} to location of event-dropped item
+			delete event-dropped item
+			loop 40 times:
+				loop all blocks in radius 6 around {_location}:
+					play large explosion at location of loop-block
+				wait 5 ticks
+				play sound "ENTITY_GENERIC_EXTINGUISH_FIRE" at volume 0.5 at {_location}
+			stop
+	if GameManager_Is_Staff(player) is true:
+		{game::status} is not "playing"
+		stop
+	cancel event
+
+on item despawn:
+	event-itemtype is a chest, emerald or a diamond
+	if metadata "capture-inventory-reset" of event-dropped item is true:
+		cancel event
+	else if metadata "capture-earn-points" of event-dropped item is true:
+		cancel event
+	else if metadata "capture-powerup" of event-dropped item is true:
+		cancel event
+
+on pickup of tnt block:
+	cancel event
+	metadata "capture-mine" of event-dropped item is not captureGetTeam(player)
+	{game::status} is "playing"
+	delete event-dropped item
+	loop 5 times:
+		show large explosion random vector event-dropped item
+	create a safe explosion with power 3 at event-dropped item
+
+on pickup of chest:
+	metadata "capture-inventory-reset" of event-dropped item is true
+	cancel event
+	{game::status} is "playing"
+	set {_location} to location of event-dropped item
+	delete event-dropped item
+	play sound "ENTITY_ITEM_PICKUP"
+	launch ball coloured yellow at location 0.1 below {_location} with duration 0
+	captureResetPlayer(player)
+	message "&6&lYour inventory has been restored!" to player
+	set block below {_location} to iron block
+	set {_arena} to {capture::temp::arena}
+	wait 1.5 minutes
+	{_arena} is {capture::temp::arena}
+	{game::status} is "playing"
+	play sound "ITEM_ARMOR_EQUIP_LEATHER" at {_location}
+	drop event-item at {_location} without velocity
+	set block below {_location} to gold block
+	set metadata "capture-inventory-reset" of last dropped item to true
+
+on pickup of emerald:
+	metadata "capture-earn-points" of event-dropped item is true
+	cancel event
+	{game::status} is "playing"
+	set {_location} to location of event-dropped item
+	delete event-dropped item
+	play sound "ENTITY_ITEM_PICKUP"
+	launch ball coloured lime at location 0.1 below {_location} with duration 0
+	if {capture::temp::{@team1}::*} contains player:
+		add 300 to {capture::temp::points::{@team1}}
+		send {capture::temp::{@team1}::*} toast notification "&a%player% collected 300 points for the team!" with icon emerald and frame goal
+	else if {capture::temp::{@team2}::*} contains player:
+		add 300 to {capture::temp::points::{@team2}}
+		send {capture::temp::{@team2}::*} toast notification "&a%player% collected 300 points for the team!" with icon emerald and frame goal
+	message "&a&lYou collected 300 points for your team!" to player
+	set block below {_location} to iron block
+	set {_arena} to {capture::temp::arena}
+	wait 1.5 minutes
+	{_arena} is {capture::temp::arena}
+	{game::status} is "playing"
+	play sound "ENTITY_EXPERIENCE_ORB_PICKUP" at pitch 2 at {_location}
+	drop event-item at {_location} without velocity
+	set block below {_location} to emerald block
+	set metadata "capture-earn-points" of last dropped item to true
+
+on pickup of diamond:
+	metadata "capture-powerup" of event-dropped item is true
+	cancel event
+	{game::status} is "playing"
+	set {_location} to location of event-dropped item
+	delete event-dropped item
+	play sound "ENTITY_ITEM_PICKUP"
+	launch ball coloured light blue at location 0.1 below {_location} with duration 0
+	message "&b&lYou have picked up a powerup!" to player
+	capturePowerup(player)
+	set block below {_location} to iron block
+	set {_arena} to {capture::temp::arena}
+	wait 1.5 minutes
+	{_arena} is {capture::temp::arena}
+	{game::status} is "playing"
+	play sound "BLOCK_BEACON_ACTIVATE" at {_location}
+	drop event-item at {_location} without velocity
+	set block below {_location} to beacon
+	set metadata "capture-powerup" of last dropped item to true
+
+on inventory click:
+	world of player is world "Capture"
+	if {game::status} is "playing":
+		if index of clicked slot is 8:
+			cancel event
+		stop
+	if clicked slot is a nether star:
+		if name of clicked slot is "&6&lMap Vote":
+			openCaptureVotingMenu(player)
+			cancel event
+	GameManager_Is_Staff(player) is false
+	cancel event
+
+on damage of player:
+	world of victim is world "Capture"
+	if {game::status} is not "playing":
+		cancel event
+		if damage cause was void:
+			teleport victim to {capture::lobby}
+		stop
+	if damage cause was void:
+		kill victim
+		stop
+	attacker is a player
+	captureGetTeam(attacker) is captureGetTeam(victim)
+	cancel event
+
+function getConnectedBlocks(itemtype: itemtype, location: location, blocks: blocks) :: blocks:
+	loop blocks in radius 1.8 around {_location}:
+		loop-block is {_itemtype}
+		if {_blocks::*} is not empty:
+			if {_blocks::*} contains loop-block:
+				continue
+		add loop-block to {_blocks::*}
+		return getConnectedBlocks({_itemtype}, loop-block, {_blocks::*})
+	return {_blocks::*}
+
+on weather change to raining or thunder:
+	event-world is world "Capture"
+	cancel event
+
+command /capture [<text>] [<text>] [<text>]:
+	aliases: /cap, /ctp, /capturethepoint
+	trigger:
+		if {game::status} is "playing":
+			argument 1 is not "end", "a" or "admin"
+			message "{@prefix}&cA game is currently being played. Only &l/cap end &ccommand is allowed."
+			stop
+		if GameManager_Is_Staff(player) is false:
+			message "{@prefix}&cYou don't have permission to do that."
+			stop
+		if GameManager_Get_Game_Key() is not "capture":
+			message "{@prefix}&cGame is not set to capture. Command disabled."
+			stop
+		if argument 1 is not set:
+			message " " and "[] = optional <> = required"
+			message "/cap setlobby &7- set lobby spawn to your current location, otherwise world spawn"
+			message "/cap lobby [player] &7- teleport yourself or a player to the game lobby"
+			message "/cap s/start &7- starts the game with random arena"
+			message "/cap cancel &7- cancel starting"
+			message "/cap e/end &7- force the game to end"
+			message "/cap startvote/vote &7- starts the game with arena voting phase"
+			message "/cap setarena <arena> &7- set the arena to play on."
+			message "/cap l/list &7- list all of the arenas"
+			message "/cap delete [arena/mapindex] &7- delete an arena"
+			message "/cap a/admin &7- admin/dev tools"
+			message "/cap setup &7- setup a new arena" and " "
+		else if argument 1 is "admin" or "a":
+			if argument 2 is "notutstart", "notutorialstart", "startskiptutorial" or "dev":
+				if {game::status} is "ending":
+					message "{@prefix}&cPrevious game is ending, please wait..."
+					stop
+				captureStart(false, false)
+			else if argument 2 is "s", "switchteam" or "switchteams":
+				set {_player} to player
+				if argument 3 is set:
+					if argument 3 parsed as player is not set:
+						message "{@prefix}&cNo player found with the name %argument 3%."
+						stop
+					set {_player} to argument 3 parsed as player
+				if {capture::temp::{@team1}::*} contains {_player}:
+					remove {_player} from {capture::temp::{@team1}::*}
+					add {_player} to {capture::temp::{@team2}::*}
+					message " ", "&c&lYou have been forced to switch teams", "<{@team2}>&lYour new team is {@team2}!" and " " to {_player}
+				else if {capture::temp::{@team2}::*} contains {_player}:
+					remove {_player} from {capture::temp::{@team2}::*}
+					add {_player} to {capture::temp::{@team1}::*}
+					message " ", "&c&lYou have been forced to switch teams", "<{@team1}>&lYour new team is {@team1}!" and " " to {_player}
+				else:
+					message "{@prefix}&c%{_player}% isn't on a team."
+					stop
+				captureResetPlayer({_player}, true)
+				play sound "ENTITY_VILLAGER_NO" at pitch 2 to {_player}
+			else:
+				message "&c/cap a notutstart/dev/startskiptutorial &7- fast start"
+				message "&c/cap a switchteams/s [player] &7- force team switch" and " "
+		else if argument 1 is "s" or "start":
+			if {game::status} is "ending":
+				message "{@prefix}&cPrevious game is ending, please wait..."
+				stop
+			captureStart()
+		else if argument 1 is "sv", "vote", "startvote" or "startandvote":
+			if {game::status} is "ending":
+				message "{@prefix}&cPrevious game is ending, please wait..."
+				stop
+			captureStart(true)
+		else if argument 1 is "e" or "end":
+			message "{@prefix}&6Ending current game..."
+			captureEndGame({capture::temp::arena})
+		else if argument 1 is "cancel":
+			GameManager_Set_Game_Status("waiting")
+			clear inventory of {lobby::players::*}
+			set gamemode of {lobby::players::*} to survival
+			teleport {lobby::players::*} to {capture::lobby}
+			message "{@prefix}&cThe game has been stopped." to {lobby::players::*}
+		else if argument 1 is "setarena":
+			if argument 2 is not set:
+				message "{@prefix}&cYou need to state an arena to set the game to."
+				execute player command "/cap"
+				stop
+			loop indices of {capture::arenas::*}:
+				if loop-value is argument 2:
+					set {capture::temp::arena} to loop-value
+					message "{@prefix}&cSet the arena to &l%loop-value%&c."
+					stop
+			message "{@prefix}&cThere was no arena with the name &l%argument 2%&c."
+		else if argument 1 is "l" or "list":
+			message "{@prefix}&aAll current arenas:"
+			loop indices of {capture::arenas::*}:
+				add 1 to {_index}
+				message "%{_index}% - %{capture::arenas::%loop-value%::name}%"
+		else if argument 1 is "setlobby":
+			set {capture::lobby} to player's location
+			message "{@prefix}You set the current lobby location to %{capture::lobby}%"
+		else if argument 1 is "lobby":
+			if argument 2 is not set:
+				teleport player to {capture::lobby}
+			else:
+				teleport argument 2 parsed as player to {capture::lobby}
+				message "{@prefix}You teleported %argument 2% to the game lobby."
+				message "{@prefix}You've been teleported game lobby." to argument 2 parsed as player
+		else if argument 1 is "delete":
+			if argument 2 is not set:
+				message "{@prefix}&cNo arena name was provided to delete."
+				execute player command "/capture"
+				stop
+			set {_find} to argument 2 parsed as number
+			if {_find} is set:
+				loop indices of {capture::arenas::*}:
+					add 1 to {_index}
+					if {_index} is {_find}:
+						delete {capture::arenas::%loop-value%::*}
+						message "{@prefix}Deleted arena %loop-value%"
+						stop
+				message "{@prefix}&cThe indices are between 1 and %size of indices of {capture::arenas::*}% not %{_index}%"
+				execute player command "/cap"
+				stop
+			if indices of {capture::arenas::*} doesn't contain argument 2:
+				message "{@prefix}&cThere was no arena with the name &l%argument 2%"
+				stop
+			set {capture::arenas::%argument 2%::flags::*} to diamond block
+			delete {capture::arenas::%argument 2%::*}
+			message "{@prefix}Deleted arena %argument 2%"
+		else if argument 1 is "setup":
+			if argument 2 is "quit":
+				delete {capture::temp::%player%::setup}
+				message "{@prefix}&eYou have left the setup process."
+			else if {capture::temp::%player%::setup} is not set:
+				set {capture::temp::%player%::setup} to true
+				message "{@prefix}Type command &l/cap setup name <name> &fto set the name."
+				message "{@prefix}Type command &l/cap setup quit &fanytime to cancel the setup process." and " "
+			else if {capture::temp::%player%::setup} is true:
+				if argument 2 is not "name":
+					message "{@prefix}Type command &l/cap setup name <name> &fto set the name."
+					stop
+				if indices of {capture::arenas::*} is set:
+					if indices of {capture::arenas::*} doesn't contain argument 3:
+						message "{@prefix}&cThere is already an arena with the name &l%argument 3%"
+						stop
+				set {capture::temp::%player%::setup} to argument 3
+				message "{@prefix}You set this current setup process name of the arena to &l%{capture::temp::%player%::setup}%"
+				message "{@prefix}Type command &l/cap setup rename <name> &fto rename the arena."
+				message "{@prefix}Type command &l/cap setup specspawn &fto set the spectator spawn of the arena." and " "
+			else if argument 2 is "rename":
+				if argument 3 is not set:
+					message "{@prefix}Type command &l/cap setup rename <name> &fto rename the arena." and " "
+					stop
+				set {capture::temp::%player%::setup} to true
+				execute player command "/cap setup name %argument 3%"
+			else if argument 2 is "specspawn" or "spectatorspawn":
+				set {capture::temp::%player%::setup::spectatorspawn} to location above player's location
+				message "{@prefix}You set the spectatorspawn of the arena to &l%{capture::temp::%player%::setup::spectatorspawn}%"
+				message "{@prefix}Type command &l/cap setup pos1 &fto set pos1 of the block to your target block. You're making a cuboid." and " "
+			else if argument 2 is "pos1":
+				set {capture::temp::%player%::setup::pos1} to location of target block
+				message "{@prefix}You set the pos1 of the arena to &l%{capture::temp::%player%::setup::pos1}%"
+				message "{@prefix}Type command &l/cap setup pos2 &fto set pos2 of your target block." and " "
+			else if argument 2 is "pos2":
+				set {capture::temp::%player%::setup::pos2} to location of target block
+				message "{@prefix}You set the pos2 of the arena to &l%{capture::temp::%player%::setup::pos2}%"
+				message "{@prefix}Type command &l/cap setup {@team1}spawn &fto set spawn of team one." and " "
+			else if argument 2 is "{@team1}spawn":
+				set {capture::temp::%player%::setup::{@team1}spawn} to location above player's location
+				message "{@prefix}You set the {@team1}spawn of the arena to &l%{capture::temp::%player%::setup::{@team1}spawn}%"
+				message "{@prefix}Type command &l/cap setup {@team2}spawn &fto set spawn of team two." and " "
+			else if argument 2 is "{@team2}spawn":
+				set {capture::temp::%player%::setup::{@team2}spawn} to location above player's location
+				message "{@prefix}You set the {@team2}spawn of the arena to &l%{capture::temp::%player%::setup::{@team2}spawn}%"
+				message "{@prefix}Type command &l/cap setup addpowerup &fto add a powerup location at your feet."
+			else if argument 2 is "addpowerup":
+				add location of block below player to {capture::temp::%player%::setup::powerups::*}
+				message "{@prefix}You added a powerup location. You can keep running the command to add more."
+				message "{@prefix}Type command &l/cap setup addpointspawn &fto add a point powerup location."
+			else if argument 2 is "addpointspawn":
+				add location of block below player to {capture::temp::%player%::setup::pointspawns::*}
+				message "{@prefix}You added a point powerup spawn location. You can keep running the command to add more."
+				message "{@prefix}Type command &l/cap setup addinventoryreset &fto add an inventory reset location."
+			else if argument 2 is "addinventoryreset" or "addinvreset":
+				add location of block below player to {capture::temp::%player%::setup::inventoryresets::*}
+				message "{@prefix}You added an inventory reset location. You can keep running the command to add more."
+				message "{@prefix}Type command &l/cap setup add/addcapture <name> &fto add a capture point."
+				message "{@prefix}You must be looking at a circle made out of white stained hardened clay." and " "
+			else if argument 2 is "add" or "addcapture" or "capturepoint":
+				set {_point} to argument 3
+				set {capture::temp::%player%::setup::captures::%{_point}%::*} to getConnectedBlocks(white stained hardened clay, target block, target block)
+				if {capture::temp::%player%::setup::captures::%{_point}%::*} is not set:
+					message "{@prefix}&cNo white stained hardened clay blocks where found at or near %location of target block%"
+					message "{@prefix}You must be looking at a circle made out of white stained hardened clay." and " "
+					stop
+				message "{@prefix}You add a capture point named %{_point}%"
+				message "{@prefix}Type command &l/cap setup tutorial capture/points/inventory/powerups &fto set the flying location of the spectators near the POI." and " "
+			else if argument 2 is "tutorial" or "tut":
+				if argument 3 is not "capture", "points", "inventory" or "powerups":
+					message "{@prefix}Type command &l/cap setup tutorial start/capture/points/inventory/powerups &fto set the flying location of the spectators near the POI." and " "
+					stop
+				set {capture::temp::%player%::setup::tutorial::%argument 3%} to location of player
+				message "{@prefix}You set the tutorial spawn of the arena to &l%{capture::temp::%player%::setup::tutorial::%argument 3%}%"
+				message "{@prefix}Type command &l/cap setup finish &fto finish the arena setup or continue adding capture points." and " "
+			else if argument 2 is "finish":
+				set {_arena} to {capture::temp::%player%::setup}
+				message "{@prefix}&fSetup details for arena &l%{_arena}%&f:"
+				loop indices of {capture::temp::%player%::setup::*}:
+					loop-value is not "captures", "flags", "powerups", "tutorial", "inventoryresets" or "pointspawns"
+					set {capture::arenas::%{_arena}%::%loop-value%} to {capture::temp::%player%::setup::%loop-value%}
+					message "{@prefix}&7Property &f%loop-value% &7is &f&l%{capture::arenas::%{_arena}%::%loop-value%}%"
+				loop indices of {capture::temp::%player%::setup::captures::*}:
+					set {capture::arenas::%{_arena}%::captures::%loop-value%::*} to {capture::temp::%player%::setup::captures::%loop-value%::*}
+				set {capture::arenas::%{_arena}%::inventoryresets::*} to {capture::temp::%player%::setup::inventoryresets::*}
+				loop {capture::temp::%player%::setup::tutorial::*}:
+					set {capture::arenas::%{_arena}%::tutorial::%loop-index%} to {capture::temp::%player%::setup::tutorial::%loop-index%}
+				set {capture::arenas::%{_arena}%::pointspawns::*} to {capture::temp::%player%::setup::pointspawns::*}
+				set {capture::arenas::%{_arena}%::powerups::*} to {capture::temp::%player%::setup::powerups::*}
+				set {capture::arenas::%{_arena}%::name} to {_arena}
+				message "{@prefix}&6Saving..."
+				loop blocks within {capture::arenas::%{_arena}%::pos1} to {capture::arenas::%{_arena}%::pos2}:
+					if loop-block is a diamond block:
+						add location of loop-block to {capture::arenas::%{_arena}%::flags::*}
+				message "{@prefix}&aSetup complete!"
+				delete {capture::temp::%player%::setup::*} and {capture::temp::%player%::setup}
+			else:
+				message "{@prefix}&cIncorrect or unknown argument."
+				execute player command "/cap"
+		else:
+			message "{@prefix}&cIncorrect or unknown argument."
+			execute player command "/cap"
