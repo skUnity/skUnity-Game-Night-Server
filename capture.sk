@@ -1,6 +1,5 @@
-
+#
 # Capture The Point by LimeGlass
-# Version 1.0
 #
 # Addons required:
 # Skacket 1.0.13
@@ -111,10 +110,10 @@ function captureResetPlayer(player: player, teleport: boolean = false):
 	clear inventory of {_player}
 	set slot 8 of {_player} to {_powerup}
 	set gamemode of {_player} to survival
-	equip {_player} with leather helmet
-	equip {_player} with leather chestplate
-	equip {_player} with leather leggings
-	equip {_player} with leather boots
+	equip {_player} with unbreakable leather helmet
+	equip {_player} with unbreakable leather chestplate
+	equip {_player} with unbreakable leather leggings
+	equip {_player} with unbreakable leather boots
 	make {_player} stop flying
 	reveal {_player} to all players
 	if {capture::temp::{@team1}::*} contains {_player}:
@@ -164,6 +163,7 @@ on death of player:
 			add 50 to {capture::temp::points::{@team2}}
 			message "&f+50 <{@team1}>%victim% &fdied to <{@team2}>%attacker%" to {capture::temp::players::*}
 			set death message to ""
+		play sound "BLOCK_NOTE_BLOCK_PLING" at pitch 1 to {capture::temp::players::*}
 	else:
 		message "&7%death message%" to {capture::temp::players::*}
 		set death message to ""
@@ -327,7 +327,7 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 				launch ball coloured light blue at location 0.1 below loop-value-2 with duration 0
 				set block at loop-value-2 to beacon
 		else:
-			message "", "&3&lWelcome To Capture The Point", "&7Goal of the game is to capture all 5 points", "&7with your team. You earn points every 2 seconds.", "&7The more captures you have, the points are given.", "The team that reachs 15,000 points first wins!", "&aGood luck and have fun!" and "" to {capture::temp::players::*}
+			message "", "&3&lWelcome To Capture The Point", "&7Goal of the game is to capture all 5 points", "&7with your team. You earn points every 2 seconds.", "&7The more captures you have, the points are given.", "The team that reachs 5,000 points first wins!", "&aGood luck and have fun!" and "" to {capture::temp::players::*}
 			{_tutorial} is true
 			wait 3 seconds
 		loop {_tutorialTime} times:
@@ -374,7 +374,7 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 	message "&f&lGood luck and have fun!" and "" to {capture::temp::players::*}
 	set title of skoreboard {capture::temp::players::*} to "&6&lCapture The Point"
 	set slot 13, 11, and 6 of skoreboard {capture::temp::players::*} to " "
-	set slot 12 of skoreboard {capture::temp::players::*} to "&7First to 15,000"
+	set slot 12 of skoreboard {capture::temp::players::*} to "&7First to 5,000"
 	set slot 10 of skoreboard {capture::temp::players::*} to "&6Team {@team1}"
 	set slot 8 of skoreboard {capture::temp::players::*} to "&5Team {@team2}"
 	loop indices of {capture::arenas::%{capture::temp::arena}%::captures::*}:
@@ -400,6 +400,9 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 				set {_colour} to {@team2}
 			# player standing on point
 			loop {capture::temp::players::*}:
+				gamemode of loop-value-2 is not spectator
+				if block at loop-value-2 is water block:
+					kill loop-value-2
 				clear {_yes}
 				if {_captures::%loop-value-1%::*} contains location of block below loop-value-2:
 					set {_yes} to true
@@ -530,12 +533,12 @@ function captureStart(voting: boolean = false, tutorial: boolean = true):
 			add 2 * size of {capture::temp::captures::{@team1}::*} to {capture::temp::points::{@team1}}
 		if {capture::temp::captures::{@team2}::*} is set:
 			add 2 * size of {capture::temp::captures::{@team2}::*} to {capture::temp::points::{@team2}}
-		if {capture::temp::points::{@team2}} is greater or equal to 15000:
+		if {capture::temp::points::{@team2}} is greater or equal to 5000:
 			loop {capture::temp::{@team2}::*}:
 				GameManager_Add_Win(loop-value)
 			send title "<{@team2}>&lTeam {@team2} are the winners!" with subtitle "&fThanks for playing!" to {capture::temp::players::*} for 4 seconds with fadein 0 ticks and fadeout 2 seconds
 			captureEndGame({capture::temp::arena}, {@team2})
-		else if {capture::temp::points::{@team1}} is greater or equal to 15000:
+		else if {capture::temp::points::{@team1}} is greater or equal to 5000:
 			loop {capture::temp::{@team1}::*}:
 				GameManager_Add_Win(loop-value)
 			send title "<{@team1}>&lTeam {@team1} are the winners!" with subtitle "&fThanks for playing!" to {capture::temp::players::*} for 4 seconds with fadein 0 ticks and fadeout 2 seconds
@@ -623,6 +626,7 @@ function capturePowerup(player: player, rigged: number = 0):
 	loop {capture::temp::players::*}:
 		captureGetTeam(loop-value) is {_team}
 		send loop-value toast notification "&b%{_player}% has powerup %name of slot 8 of {_player}%" with icon {_type} and frame task
+		message "&7TEAM: &b%{_player}% has powerup %name of slot 8 of {_player}%" to loop-value
 	loop 6 times:
 		send action bar {_description} to {_player}
 		wait 2 seconds
@@ -634,6 +638,8 @@ on left click with stone axe:
 on right click:
 	event-world is world {@world}
 	{game::status} is "playing"
+	if player's tool is a bow:
+		stop
 	cancel event
 	player's current hotbar slot is 8
 	set {_item} to slot 8 of player
@@ -757,6 +763,7 @@ on pickup of tnt block:
 	loop 5 times:
 		show large explosion random vector event-dropped item
 	create a safe explosion with power 3 at event-dropped item
+	damage player by 7
 
 on pickup of chest:
 	metadata "capture-inventory-reset" of event-dropped item is true
@@ -867,10 +874,10 @@ on weather change to raining or thunder:
 command /capture [<text>] [<text>] [<text>]:
 	aliases: /cap, /ctp, /capturethepoint
 	trigger:
-		if {game::status} is "playing":
-			argument 1 is not "end", "a" or "admin"
-			message "{@prefix}&cA game is currently being played. Only &l/cap end &ccommand is allowed."
-			stop
+		#if {game::status} is "playing":
+		#	argument 1 is not "end", "a" or "admin"
+		#	message "{@prefix}&cA game is currently being played. Only &l/cap end &ccommand is allowed."
+		#	stop
 		if GameManager_Is_Staff(player) is false:
 			message "{@prefix}&cYou don't have permission to do that."
 			stop
